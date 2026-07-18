@@ -6,7 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Docket CRM</title>
 <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --paper:#F7F5F0; --paper-card:#FFFFFF; --paper-card-alt:#FBFAF7;
@@ -381,8 +383,15 @@
         <span class="subtab active" data-subview="skip" onclick="switchAssetSubview('skip')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Smart skips</span>
         <span class="subtab" data-subview="scp" onclick="switchAssetSubview('scp')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Collection points</span>
       </div>
-      <input class="search-input" id="assetSearch" placeholder="Search by asset number, customer, address, or postcode" oninput="renderAssets()">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+        <input class="search-input" id="assetSearch" placeholder="Search by asset number, customer, address, or postcode" oninput="renderAssets()" style="flex:1;margin-bottom:0;">
+        <button class="btn ghost small" id="assetsMapToggleBtn" onclick="toggleAssetsMapView()" style="display:none;white-space:nowrap;">Show on map</button>
+      </div>
       <div id="assetsListContainer"></div>
+      <div id="assetsMapContainer" style="display:none;">
+        <div id="assetsMapStatus" style="font-size:12.5px;color:var(--slate);margin-bottom:8px;"></div>
+        <div id="assetsMap" style="height:520px;border-radius:8px;border:1px solid var(--border);"></div>
+      </div>
     </div>
 
     <!-- ---------- TASKS VIEW ---------- -->
@@ -646,6 +655,9 @@ let tasks = [];
 let teamMembers = [];
 let currentTaskSubview = 'open';
 let currentAssetSubview = 'skip';
+let assetsMapView = false;
+let leafletMapInstance = null;
+let leafletMarkersLayer = null;
 const DEAL_STAGES = [
   {key:'lead', label:'Lead'},
   {key:'contacted', label:'Contacted'},
@@ -1562,7 +1574,8 @@ function assetRowToCamel(row){
     containerType: row.container_type, containerVolume: row.container_volume, wasteStream: row.waste_stream, paintDrum: row.paint_drum,
     padlockNumber: row.padlock_number, sensorSerial: row.sensor_serial, fillSensor: row.fill_sensor, qr: row.qr, signage: row.signage,
     subbie: row.subbie, groupedInvoicing: row.grouped_invoicing, weeklyRental: row.weekly_rental,
-    masterPin: row.master_pin, branch: row.branch, branchContact: row.branch_contact, notes: row.notes
+    masterPin: row.master_pin, branch: row.branch, branchContact: row.branch_contact, notes: row.notes,
+    latitude: row.latitude, longitude: row.longitude
   };
 }
 function camelToAssetRow(a){
@@ -1592,10 +1605,13 @@ function switchAssetSubview(view){
   document.getElementById('assetsAddBtn').textContent = view==='skip' ? '+ New smart skip' : '+ New collection point';
   document.getElementById('assetSearch').placeholder = view==='skip'
     ? 'Search by asset number, customer, address, or postcode' : 'Search by asset number, housing association, address, or branch';
+  document.getElementById('assetsMapToggleBtn').style.display = view==='skip' ? 'inline-flex' : 'none';
+  showAssetsListView();
   renderAssets();
 }
 
 function renderAssets(){
+  if(assetsMapView){ renderAssetsMap(); return; }
   const q = (document.getElementById('assetSearch').value || '').toLowerCase();
   const container = document.getElementById('assetsListContainer');
   const filtered = assets.filter(a=>{
@@ -1632,6 +1648,108 @@ function renderAssets(){
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+}
+
+/* ---------- Smart skip map view ---------- */
+function showAssetsListView(){
+  assetsMapView = false;
+  document.getElementById('assetsListContainer').style.display = 'block';
+  document.getElementById('assetsMapContainer').style.display = 'none';
+  document.getElementById('assetsMapToggleBtn').textContent = 'Show on map';
+}
+
+function toggleAssetsMapView(){
+  if(assetsMapView){
+    showAssetsListView();
+    return;
+  }
+  assetsMapView = true;
+  document.getElementById('assetsListContainer').style.display = 'none';
+  document.getElementById('assetsMapContainer').style.display = 'block';
+  document.getElementById('assetsMapToggleBtn').textContent = 'Show as list';
+  renderAssetsMap();
+}
+
+async function renderAssetsMap(){
+  const q = (document.getElementById('assetSearch').value || '').toLowerCase();
+  const statusEl = document.getElementById('assetsMapStatus');
+  const skipsToShow = assets.filter(a=>{
+    if((a.assetType||'skip') !== 'skip') return false;
+    if(!q) return true;
+    return (a.assetNumber||'').toLowerCase().includes(q) || (a.customerName||'').toLowerCase().includes(q) ||
+           (a.address||'').toLowerCase().includes(q) || (a.postcode||'').toLowerCase().includes(q);
+  });
+
+  const withPostcode = skipsToShow.filter(a=>a.postcode && a.postcode.trim());
+  const needGeocode = withPostcode.filter(a=>!a.latitude || !a.longitude);
+
+  if(needGeocode.length > 0){
+    statusEl.textContent = 'Looking up ' + needGeocode.length + ' postcode' + (needGeocode.length===1?'':'s') + '…';
+    await geocodeAssetPostcodes(needGeocode);
+  }
+
+  const withCoords = withPostcode.filter(a=>a.latitude && a.longitude);
+  const missingCount = skipsToShow.length - withCoords.length;
+  statusEl.textContent = 'Showing ' + withCoords.length + ' of ' + skipsToShow.length + ' smart skips on the map'
+    + (missingCount > 0 ? ' (' + missingCount + ' skipped — no valid postcode on file)' : '') + '.';
+
+  if(!leafletMapInstance){
+    leafletMapInstance = L.map('assetsMap');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(leafletMapInstance);
+    leafletMarkersLayer = L.layerGroup().addTo(leafletMapInstance);
+  }
+  leafletMarkersLayer.clearLayers();
+
+  if(withCoords.length === 0){
+    leafletMapInstance.setView([54.5, -3], 6); // fallback: centre of UK
+    return;
+  }
+
+  const bounds = [];
+  withCoords.forEach(a=>{
+    const marker = L.marker([a.latitude, a.longitude]);
+    marker.bindPopup(
+      '<b>' + escapeHtml(a.assetNumber||'—') + '</b><br>' +
+      escapeHtml(a.customerName||'') + (a.customerName ? '<br>' : '') +
+      escapeHtml(a.address||'') + (a.address ? '<br>' : '') +
+      escapeHtml(a.postcode||'')
+    );
+    marker.on('click', ()=>{ /* no-op: popup shows details, click the row in list view to edit */ });
+    leafletMarkersLayer.addLayer(marker);
+    bounds.push([a.latitude, a.longitude]);
+  });
+  leafletMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+  setTimeout(()=>leafletMapInstance.invalidateSize(), 50);
+}
+
+async function geocodeAssetPostcodes(assetsNeedingGeocode){
+  const chunkSize = 100;
+  for(let i=0; i<assetsNeedingGeocode.length; i+=chunkSize){
+    const chunk = assetsNeedingGeocode.slice(i, i+chunkSize);
+    try{
+      const res = await fetch('https://api.postcodes.io/postcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postcodes: chunk.map(a=>a.postcode.trim()) })
+      });
+      const data = await res.json();
+      if(!data || !data.result) continue;
+      for(let j=0; j<data.result.length; j++){
+        const entry = data.result[j];
+        const asset = chunk[j];
+        if(entry && entry.result){
+          asset.latitude = entry.result.latitude;
+          asset.longitude = entry.result.longitude;
+          await sb.from('assets').update({ latitude: asset.latitude, longitude: asset.longitude }).eq('id', asset.id);
+        }
+      }
+    }catch(e){
+      showToast('Could not look up some postcodes — check your connection and try again.', true);
+    }
+  }
 }
 
 function onAssetTypeChange(){
