@@ -979,11 +979,9 @@ async function afterLogin(user){
   document.getElementById('app').classList.add('active');
   document.getElementById('sidebarWho').textContent = profile.name || profile.email;
   document.getElementById('sidebarRole').textContent = profile.role;
-  if(profile.role === 'admin'){
+  if(profile.role === 'manager' || profile.role === 'admin'){
     document.getElementById('teamNavItem').style.display = 'block';
     document.getElementById('newTeamMemberBtn').style.display = 'inline-flex';
-  }
-  if(profile.role === 'manager' || profile.role === 'admin'){
     document.getElementById('spDefaultPricingBtn').style.display = 'inline-flex';
   }
   await loadOrganisations();
@@ -1722,7 +1720,13 @@ function openNewTeamMemberModal(){
   document.getElementById('tmName').value = '';
   document.getElementById('tmEmail').value = '';
   document.getElementById('tmPassword').value = '';
-  document.getElementById('tmRole').value = 'user';
+  const roleSelect = document.getElementById('tmRole');
+  if(currentProfile.role === 'manager'){
+    roleSelect.innerHTML = '<option value="user">User</option>';
+  }else{
+    roleSelect.innerHTML = '<option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option>';
+  }
+  roleSelect.value = 'user';
   document.getElementById('teamModalError').style.display = 'none';
   document.getElementById('teamModalOverlay').classList.add('active');
 }
