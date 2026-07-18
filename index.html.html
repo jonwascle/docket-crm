@@ -266,6 +266,11 @@
         <div id="onboardingMissingFieldsBanner" class="missing-fields-banner" style="display:none;"></div>
 
         <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Tasks for this organisation</span><button class="btn ghost small" onclick="openTaskModal(null, {organisationId: currentOnboardingOrgId})" id="onboardingAddTaskBtn" style="display:none;">+ Add task</button></div>
+          <div id="onboardingOrgTasksList"></div>
+        </div>
+
+        <div class="onboard-section">
           <div class="onboard-section-head"><span class="onboard-section-title">Organisation detail</span><span class="onboard-badge" id="badgeOrgDetail"></span></div>
           <div class="field"><label>Customer name</label><input id="obCustomerName" oninput="updateOnboardingProgress()"></div>
           <div class="field"><label>Address line 1</label><input id="obAddr1" oninput="updateOnboardingProgress()"></div>
@@ -607,11 +612,17 @@
       <select id="taskAssignedTo"><option value="">— Unassigned —</option></select>
     </div>
     <div class="field"><label>Notes</label><textarea id="taskNotes"></textarea></div>
+    <div class="field" id="taskPoField" style="display:none;">
+      <label>PO number / reference</label>
+      <input id="taskPoReference" placeholder="Enter the PO once the customer sends it">
+      <p style="font-size:12px;color:var(--slate);margin-top:4px;">This task stays open until a PO reference is entered here. Saving it will complete this task and set up the next step.</p>
+    </div>
     <div class="modal-actions">
       <button class="btn danger small" id="taskDeleteBtn" style="display:none;" onclick="deleteTask()">Delete</button>
       <div class="right">
         <button class="btn ghost small" onclick="closeModal('taskModalOverlay')">Cancel</button>
-        <button class="btn small" onclick="saveTask()">Save task</button>
+        <button class="btn small" onclick="saveTask()" id="taskSaveBtn">Save task</button>
+        <button class="btn small" onclick="markPoReceivedAndComplete()" id="taskPoCompleteBtn" style="display:none;">Save PO &amp; complete task</button>
       </div>
     </div>
   </div>
@@ -1171,6 +1182,8 @@ function openOnboardingDetail(orgId){
 
   document.getElementById('onboardingListMode').style.display = 'none';
   document.getElementById('onboardingDetailMode').style.display = 'block';
+  document.getElementById('onboardingAddTaskBtn').style.display = orgId ? 'inline-flex' : 'none';
+  renderOrgTasksInOnboarding(orgId);
   updateOnboardingProgress();
 }
 
@@ -1733,6 +1746,36 @@ function renderTasks(){
   container.innerHTML = html;
 }
 
+function refreshOrgTasksSectionIfVisible(){
+  const detailVisible = document.getElementById('onboardingDetailMode').style.display !== 'none';
+  if(detailVisible && currentOnboardingOrgId){
+    renderOrgTasksInOnboarding(currentOnboardingOrgId);
+  }
+}
+
+function renderOrgTasksInOnboarding(orgId){
+  const container = document.getElementById('onboardingOrgTasksList');
+  if(!orgId){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this customer first, then tasks can be added here.</p>';
+    return;
+  }
+  const orgTasks = tasks.filter(t=>t.organisation_id===orgId).sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+  if(orgTasks.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No tasks for this organisation yet.</p>';
+    return;
+  }
+  let html = '';
+  orgTasks.forEach(t=>{
+    const isOpen = t.status !== 'done';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openTaskModal(\''+t.id+'\')">';
+    html += '<div><span style="font-weight:'+(isOpen?'600':'400')+';'+(isOpen?'':'color:var(--slate);text-decoration:line-through;')+'">'+escapeHtml(t.title)+'</span>';
+    html += '<div style="font-size:11.5px;color:var(--slate);margin-top:2px;">'+(t.assigned_to?('Assigned to '+escapeHtml(teamMemberName(t.assigned_to)||'—')):'Unassigned')+'</div></div>';
+    html += '<span class="onboard-badge'+(isOpen?'':' complete')+'">'+(isOpen?'Open':'Done')+'</span>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
 function populateTaskAssigneeDropdown(selectedId){
   const sel = document.getElementById('taskAssignedTo');
   sel.innerHTML = '<option value="">— Unassigned —</option>' +
@@ -1758,11 +1801,26 @@ function openTaskModal(id, prefill){
     orgField.style.display = 'none';
   }
 
-  document.getElementById('taskChainKey').value = t ? (t.chain_key||'') : (prefill ? (prefill.chainKey||'') : '');
-  document.getElementById('taskChainStep').value = t ? (t.chain_step||'') : (prefill ? (prefill.chainStep||'') : '');
+  const chainKey = t ? (t.chain_key||'') : (prefill ? (prefill.chainKey||'') : '');
+  const chainStep = t ? (t.chain_step||'') : (prefill ? (prefill.chainStep||'') : '');
+  document.getElementById('taskChainKey').value = chainKey;
+  document.getElementById('taskChainStep').value = chainStep;
 
   populateTaskAssigneeDropdown(t ? t.assigned_to : (prefill ? prefill.assignedTo : ''));
   document.getElementById('taskDeleteBtn').style.display = t ? 'inline-flex' : 'none';
+
+  // The "request PO" step in the waste-bags chain works differently: it stays
+  // open until someone actually enters the PO reference, which is what
+  // completes it and kicks off the next step.
+  const isPoTask = chainKey === 'waste_bags' && Number(chainStep) === 1 && t && t.status !== 'done';
+  document.getElementById('taskPoField').style.display = isPoTask ? 'block' : 'none';
+  document.getElementById('taskPoCompleteBtn').style.display = isPoTask ? 'inline-flex' : 'none';
+  document.getElementById('taskSaveBtn').style.display = isPoTask ? 'none' : 'inline-flex';
+  if(isPoTask){
+    const org = orgId ? organisations.find(o=>o.id===orgId) : null;
+    document.getElementById('taskPoReference').value = (org && org.waste_bag_po_reference) || '';
+  }
+
   document.getElementById('taskModalOverlay').classList.add('active');
 }
 
@@ -1790,6 +1848,7 @@ async function saveTask(){
   closeModal('taskModalOverlay');
   await loadTasks();
   renderTasks();
+  refreshOrgTasksSectionIfVisible();
   showToast('Task saved.');
 }
 
@@ -1802,20 +1861,38 @@ async function deleteTask(){
   closeModal('taskModalOverlay');
   await loadTasks();
   renderTasks();
+  refreshOrgTasksSectionIfVisible();
   showToast('Task deleted.');
 }
 
 async function toggleTaskDone(id, isDone){
   const task = tasks.find(x=>x.id===id);
   if(!task) return;
+
+  // The "request PO" step can't be ticked off directly — it needs an actual
+  // PO reference entered first, so send them to the modal for that instead.
+  if(isDone && task.chain_key === 'waste_bags' && Number(task.chain_step) === 1){
+    renderTasks(); // reset the checkbox visually, since we're not completing it this way
+    openTaskModal(id);
+    showToast('Enter the PO reference to complete this task.');
+    return;
+  }
+
   const { error } = await sb.from('tasks')
     .update({ status: isDone ? 'done' : 'todo', completed_at: isDone ? new Date().toISOString() : null })
     .eq('id', id);
   if(error){ showToast('Could not update task: ' + error.message, true); return; }
   await loadTasks();
   renderTasks();
+  refreshOrgTasksSectionIfVisible();
 
-  if(isDone && task.chain_key && TASK_CHAINS[task.chain_key]){
+  if(isDone){
+    continueTaskChainIfAny(task);
+  }
+}
+
+function continueTaskChainIfAny(task){
+  if(task.chain_key && TASK_CHAINS[task.chain_key]){
     const chain = TASK_CHAINS[task.chain_key];
     const next = chain.find(s=>s.step === (task.chain_step||0) + 1);
     if(next){
@@ -1831,9 +1908,36 @@ async function toggleTaskDone(id, isDone){
       return;
     }
     showToast('Task complete — that chain is now finished.');
-  }else if(isDone){
+  }else{
     showToast('Task marked complete.');
   }
+}
+
+async function markPoReceivedAndComplete(){
+  const id = document.getElementById('taskId').value;
+  const task = tasks.find(x=>x.id===id);
+  if(!task) return;
+  const poReference = document.getElementById('taskPoReference').value.trim();
+  if(!poReference){ showToast('Enter the PO reference before completing this task.', true); return; }
+
+  if(task.organisation_id){
+    const { error: orgErr } = await sb.from('organisations')
+      .update({ waste_bag_po_reference: poReference })
+      .eq('id', task.organisation_id);
+    if(orgErr){ showToast('Could not save the PO to the organisation: ' + orgErr.message, true); return; }
+    await loadOrganisations();
+  }
+
+  const { error } = await sb.from('tasks')
+    .update({ status: 'done', completed_at: new Date().toISOString(), notes: (task.notes||'') + (task.notes?' | ':'') + 'PO: ' + poReference })
+    .eq('id', id);
+  if(error){ showToast('Could not complete task: ' + error.message, true); return; }
+
+  closeModal('taskModalOverlay');
+  await loadTasks();
+  renderTasks();
+  refreshOrgTasksSectionIfVisible();
+  continueTaskChainIfAny(task);
 }
 
 /* Called after onboarding is saved, to start the waste-bags task chain
