@@ -434,7 +434,7 @@
             <p class="view-sub">Everyone who collects waste on our behalf — their details, documents, and coverage.</p>
           </div>
           <div style="display:flex;gap:8px;">
-            <button class="btn ghost small" onclick="openSPDefaultPricing()">Manage default pricing</button>
+            <button class="btn ghost small" id="spDefaultPricingBtn" onclick="openSPDefaultPricing()" style="display:none;">Manage default pricing</button>
             <button class="btn small" onclick="openServiceProviderDetail(null)">+ New service provider</button>
           </div>
         </div>
@@ -982,6 +982,9 @@ async function afterLogin(user){
   if(profile.role === 'admin'){
     document.getElementById('teamNavItem').style.display = 'block';
     document.getElementById('newTeamMemberBtn').style.display = 'inline-flex';
+  }
+  if(profile.role === 'manager' || profile.role === 'admin'){
+    document.getElementById('spDefaultPricingBtn').style.display = 'inline-flex';
   }
   await loadOrganisations();
   await loadContacts();
@@ -2657,6 +2660,10 @@ async function loadSPDefaultPricing(){
 }
 
 async function openSPDefaultPricing(){
+  if(currentProfile.role !== 'manager' && currentProfile.role !== 'admin'){
+    showToast('Only managers and admins can edit the default price list.', true);
+    return;
+  }
   await loadSPDefaultPricing();
   document.getElementById('spListMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'none';
@@ -2841,10 +2848,18 @@ async function resetSPPricingToDefault(){
   showToast('Pricing reset to default.');
 }
 
+const PDF_CATEGORY_ORDER = ['Smart skips', 'Price per cubic yard', 'Chargeable extras'];
+function pdfCategoryRank(category){
+  const idx = PDF_CATEGORY_ORDER.indexOf(category);
+  return idx === -1 ? PDF_CATEGORY_ORDER.length : idx;
+}
+
 function downloadSPPricingPdf(){
   if(!currentSPId) return;
   const sp = serviceProviders.find(s=>s.id===currentSPId);
-  const activeItems = spVisiblePricingRows().filter(r=>r.is_active !== false);
+  const activeItems = spVisiblePricingRows().filter(r=>r.is_active !== false)
+    .slice()
+    .sort((a,b)=> pdfCategoryRank(a.category) - pdfCategoryRank(b.category));
   if(!sp || activeItems.length===0){ showToast('No included pricing lines to put in the PDF.', true); return; }
   const items = activeItems.map(r=>({ name: r.service_name, category: r.category, basePrice: r.rate }));
   const pseudoQuote = { id: sp.id, contactId: null, createdAt: Date.now(), adjustmentPct: 0, items };
