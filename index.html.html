@@ -15,6 +15,8 @@
     --ink:#1B1B1B; --ink-soft:#3A3A3A; --slate:#7A7A72; --border:#E7E3D9;
     --brass:#F5B429; --stamp-green:#3A7D44; --stamp-green-bg:#EAF4EB;
     --stamp-red:#B3413A; --stamp-red-bg:#FBEBEA;
+    --stamp-blue:#4C6EA6; --stamp-blue-bg:#EBF0F7;
+    --stamp-orange:#C9762E; --stamp-orange-bg:#FBF0E4;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Comfortaa',sans-serif;background:var(--paper);color:var(--ink);}
@@ -101,13 +103,27 @@
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:6px;font-size:13px;z-index:200;display:none;}
   .toast.error{background:var(--stamp-red);}
 
-  .kanban-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;}
-  .kanban-col{flex:0 0 240px;background:var(--paper-card);border:1px solid var(--border);border-radius:8px;padding:12px;}
-  .kanban-col-title{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);margin-bottom:10px;display:flex;justify-content:space-between;}
-  .kanban-card{background:var(--paper-card-alt);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px;cursor:pointer;font-size:13px;}
-  .kanban-card:hover{border-color:var(--brass);}
-  .kanban-card-title{font-weight:600;margin:0 0 4px;}
-  .kanban-card-value{color:var(--slate);font-size:12px;}
+  .kanban-board{display:grid;grid-template-columns:repeat(6, minmax(0, 1fr));gap:12px;height:calc(100vh - 230px);min-height:420px;}
+  .kanban-col{display:flex;flex-direction:column;background:var(--paper-card-alt);border:1px solid var(--border);border-radius:10px;overflow:hidden;border-top:3px solid var(--stage-color, var(--slate));}
+  .kanban-col-head{padding:12px 12px 10px;flex-shrink:0;}
+  .kanban-col-title-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;}
+  .kanban-col-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--ink);}
+  .kanban-col-count{font-size:11px;font-weight:700;color:var(--stage-color, var(--slate));background:var(--stage-bg, var(--paper-card));border-radius:10px;padding:1px 8px;}
+  .kanban-col-total{font-size:11.5px;color:var(--slate);}
+  .kanban-col-body{flex:1;overflow-y:auto;padding:0 10px 10px;}
+  .kanban-card{background:var(--paper-card);border:1px solid var(--border);border-left:3px solid var(--stage-color, var(--slate));border-radius:7px;padding:10px 11px;margin-bottom:8px;cursor:pointer;font-size:13px;box-shadow:0 1px 2px rgba(0,0,0,0.03);transition:box-shadow 0.12s ease, transform 0.12s ease;}
+  .kanban-card:hover{box-shadow:0 4px 10px rgba(0,0,0,0.08);transform:translateY(-1px);}
+  .kanban-card-title{font-weight:600;margin:0 0 5px;color:var(--ink);}
+  .kanban-card-value{color:var(--slate);font-size:11.5px;display:flex;justify-content:space-between;align-items:center;}
+  .kanban-empty-col{color:var(--slate);font-size:12px;text-align:center;padding:18px 8px;}
+  .stage-info-icon{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--border);color:var(--ink-soft);font-size:10px;font-style:italic;font-weight:700;font-family:Georgia,serif;cursor:pointer;vertical-align:middle;margin-left:2px;}
+  .stage-info-icon:hover{background:var(--stage-color, var(--brass));color:#fff;}
+  .postcode-chip{display:inline-flex;align-items:center;gap:6px;background:var(--paper-card-alt);border:1px solid var(--border);border-radius:14px;padding:4px 6px 4px 12px;font-size:12.5px;font-weight:600;}
+  .postcode-chip-remove{cursor:pointer;color:var(--stamp-red);font-weight:700;background:#fff;border-radius:50%;width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;}
+  .doc-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
+  .doc-row-name{font-weight:600;}
+  .doc-row-meta{font-size:11.5px;color:var(--slate);margin-top:2px;}
+  .doc-row-expired{color:var(--stamp-red);font-weight:700;}
   .subtab.active{border-bottom-color:var(--brass) !important;color:var(--ink);}
   .subtab{color:var(--slate);}
   .panel-box{background:var(--paper-card);border:1px solid var(--border);border-radius:8px;padding:16px;}
@@ -159,6 +175,7 @@
     <div class="nav-item" data-view="quotes" onclick="switchView('quotes')">Quotes</div>
     <div class="nav-item" data-view="onboarding" onclick="switchView('onboarding')">Onboarding</div>
     <div class="nav-item" data-view="assets" onclick="switchView('assets')">Assets</div>
+    <div class="nav-item" data-view="serviceproviders" onclick="switchView('serviceproviders')">Service Providers</div>
     <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">Tasks</div>
     <div class="nav-item" data-view="team" onclick="switchView('team')" id="teamNavItem" style="display:none;">Team</div>
     <div class="sidebar-footer">
@@ -213,6 +230,11 @@
         <div class="onboard-section">
           <div class="onboard-section-head"><span class="onboard-section-title">Contacts</span><button class="btn ghost small" onclick="addContactForCurrentOrg()">+ Add contact</button></div>
           <div id="orgDetailContacts"></div>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Quotes</span><button class="btn ghost small" onclick="addQuoteForCurrentOrg()">+ New quote</button></div>
+          <div id="orgDetailQuotes"></div>
         </div>
 
         <div class="onboard-section">
@@ -385,12 +407,102 @@
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
         <input class="search-input" id="assetSearch" placeholder="Search by asset number, customer, address, or postcode" oninput="renderAssets()" style="flex:1;margin-bottom:0;">
-        <button class="btn ghost small" id="assetsMapToggleBtn" onclick="toggleAssetsMapView()" style="display:none;white-space:nowrap;">Show on map</button>
+        <button class="btn ghost small" id="assetsMapToggleBtn" onclick="toggleAssetsMapView()" style="white-space:nowrap;">Show on map</button>
       </div>
       <div id="assetsListContainer"></div>
       <div id="assetsMapContainer" style="display:none;">
         <div id="assetsMapStatus" style="font-size:12.5px;color:var(--slate);margin-bottom:8px;"></div>
         <div id="assetsMap" style="height:520px;border-radius:8px;border:1px solid var(--border);"></div>
+      </div>
+    </div>
+
+    <!-- ---------- SERVICE PROVIDERS VIEW ---------- -->
+    <div id="view-serviceproviders" class="view">
+      <div id="spListMode">
+        <div class="view-header">
+          <div>
+            <p class="view-title">Service Providers</p>
+            <p class="view-sub">Everyone who collects waste on our behalf — their details, documents, and coverage.</p>
+          </div>
+          <button class="btn small" onclick="openServiceProviderDetail(null)">+ New service provider</button>
+        </div>
+        <input class="search-input" id="spSearch" placeholder="Search by company name" oninput="renderServiceProvidersList()">
+        <div id="spListContainer"></div>
+      </div>
+
+      <div id="spDetailMode" style="display:none;">
+        <div class="view-header">
+          <div><p class="view-title" id="spDetailTitle"></p></div>
+          <button class="btn ghost small" onclick="showServiceProvidersList()">← Back</button>
+        </div>
+        <div class="subtabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);">
+          <span class="subtab active" data-sptab="details" onclick="switchSPSubtab('details')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Details</span>
+          <span class="subtab" data-sptab="documents" onclick="switchSPSubtab('documents')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Documents</span>
+          <span class="subtab" data-sptab="team" onclick="switchSPSubtab('team')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Team members</span>
+          <span class="subtab" data-sptab="wts" onclick="switchSPSubtab('wts')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Waste transfer stations</span>
+        </div>
+
+        <div id="spSubtab-details">
+          <input type="hidden" id="spId">
+          <div class="field"><label>Company name</label><input id="spName"></div>
+          <div class="field"><label>Address line 1</label><input id="spAddr1"></div>
+          <div class="field"><label>Address line 2</label><input id="spAddr2"></div>
+          <div class="field-row">
+            <div class="field"><label>City</label><input id="spCity"></div>
+            <div class="field"><label>County</label><input id="spCounty"></div>
+          </div>
+          <div class="field"><label>Postcode</label><input id="spPostcode"></div>
+          <div class="field"><label>Waste carriers licence number</label><input id="spLicenceNumber"></div>
+          <div class="field-row">
+            <div class="field"><label>Email</label><input id="spEmail" type="email"></div>
+            <div class="field"><label>Phone</label><input id="spPhone"></div>
+          </div>
+          <div class="field"><label>VAT registered?</label>
+            <select id="spVatRegistered" onchange="onSPVatToggleChange()">
+              <option value="no">No</option><option value="yes">Yes</option>
+            </select>
+          </div>
+          <div class="field" id="spVatNumberField" style="display:none;"><label>VAT number</label><input id="spVatNumber"></div>
+          <div class="field"><label>Sole trader or registered company?</label>
+            <select id="spBusinessType" onchange="onSPBusinessTypeChange()">
+              <option value="sole_trader">Sole trader</option><option value="company">Registered company</option>
+            </select>
+          </div>
+          <div class="field" id="spCompanyNumberField" style="display:none;"><label>Company number</label><input id="spCompanyNumber"></div>
+
+          <div class="field">
+            <label>Postcode areas covered</label>
+            <div style="display:flex;gap:8px;">
+              <input id="spPostcodeAreaInput" placeholder="e.g. TR4" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addSPPostcodeArea();}">
+              <button class="btn ghost small" onclick="addSPPostcodeArea()">+ Add</button>
+            </div>
+            <div id="spPostcodeAreaList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"></div>
+          </div>
+
+          <div class="field"><label>Notes</label><textarea id="spNotes"></textarea></div>
+
+          <div class="modal-actions" style="max-width:none;margin:0 0 30px;">
+            <button class="btn danger small" id="spDeleteBtn" style="display:none;" onclick="deleteServiceProvider()">Delete service provider</button>
+            <div class="right">
+              <button class="btn small" onclick="saveServiceProvider()">Save details</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="spSubtab-documents" style="display:none;">
+          <button class="btn small" style="margin-bottom:14px;" onclick="openSPDocumentModal()">+ Upload document</button>
+          <div id="spDocumentsList"></div>
+        </div>
+
+        <div id="spSubtab-team" style="display:none;">
+          <button class="btn small" style="margin-bottom:14px;" onclick="openSPTeamMemberModal()">+ Add team member</button>
+          <div id="spTeamList"></div>
+        </div>
+
+        <div id="spSubtab-wts" style="display:none;">
+          <button class="btn small" style="margin-bottom:14px;" onclick="openSPWasteStationModal()">+ Add waste transfer station</button>
+          <div id="spWasteStationsList"></div>
+        </div>
       </div>
     </div>
 
@@ -532,6 +644,20 @@
   </div>
 </div>
 
+<!-- ---------- Stage info modal ---------- -->
+<div class="modal-overlay" id="stageInfoModalOverlay">
+  <div class="modal" style="max-width:340px;">
+    <p class="modal-title"><span id="stageInfoTitle"></span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('stageInfoModalOverlay')">✕</span></p>
+    <p style="font-size:13.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 18px;" id="stageInfoDescription"></p>
+    <div class="modal-actions">
+      <span></span>
+      <div class="right">
+        <button class="btn small" onclick="closeModal('stageInfoModalOverlay')">Got it</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ---------- Asset modal ---------- -->
 <div class="modal-overlay" id="assetModalOverlay">
   <div class="modal">
@@ -633,6 +759,61 @@
   </div>
 </div>
 
+<!-- ---------- SP Document modal ---------- -->
+<div class="modal-overlay" id="spDocumentModalOverlay">
+  <div class="modal">
+    <p class="modal-title"><span id="spDocumentModalTitle">Upload document</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('spDocumentModalOverlay')">✕</span></p>
+    <input type="hidden" id="spDocumentId">
+    <div class="login-error" id="spDocumentModalError"></div>
+    <div class="field"><label>Document name</label><input id="spDocumentName" placeholder="e.g. Insurance, Jon Smith"></div>
+    <div class="field" id="spDocumentFileField"><label>File</label><input id="spDocumentFile" type="file"></div>
+    <div class="field"><label>Reminder — expiry date (optional)</label><input id="spDocumentExpiryDate" type="date"></div>
+    <p style="font-size:12px;color:var(--slate);margin-top:-8px;">Leave this blank if this document doesn't need renewing (e.g. a photo). If you set a date, a task will be created to get a replacement.</p>
+    <div class="modal-actions">
+      <button class="btn danger small" id="spDocumentDeleteBtn" style="display:none;" onclick="deleteSPDocument()">Delete</button>
+      <div class="right">
+        <button class="btn ghost small" onclick="closeModal('spDocumentModalOverlay')">Cancel</button>
+        <button class="btn small" id="spDocumentSaveBtn" onclick="saveSPDocument()">Upload</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- SP Team member modal ---------- -->
+<div class="modal-overlay" id="spTeamMemberModalOverlay">
+  <div class="modal">
+    <p class="modal-title"><span id="spTeamMemberModalTitle">New team member</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('spTeamMemberModalOverlay')">✕</span></p>
+    <input type="hidden" id="spTeamMemberId">
+    <div class="field"><label>Name</label><input id="spTeamMemberName"></div>
+    <div class="field"><label>Email</label><input id="spTeamMemberEmail" type="email"></div>
+    <div class="field"><label>Phone</label><input id="spTeamMemberPhone"></div>
+    <div class="modal-actions">
+      <button class="btn danger small" id="spTeamMemberDeleteBtn" style="display:none;" onclick="deleteSPTeamMember()">Delete</button>
+      <div class="right">
+        <button class="btn ghost small" onclick="closeModal('spTeamMemberModalOverlay')">Cancel</button>
+        <button class="btn small" onclick="saveSPTeamMember()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- SP Waste transfer station modal ---------- -->
+<div class="modal-overlay" id="spWasteStationModalOverlay">
+  <div class="modal">
+    <p class="modal-title"><span id="spWasteStationModalTitle">New waste transfer station</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('spWasteStationModalOverlay')">✕</span></p>
+    <input type="hidden" id="spWasteStationId">
+    <div class="field"><label>Station name</label><input id="spWasteStationName"></div>
+    <div class="field"><label>Licence number</label><input id="spWasteStationLicence"></div>
+    <div class="modal-actions">
+      <button class="btn danger small" id="spWasteStationDeleteBtn" style="display:none;" onclick="deleteSPWasteStation()">Delete</button>
+      <div class="right">
+        <button class="btn ghost small" onclick="closeModal('spWasteStationModalOverlay')">Cancel</button>
+        <button class="btn small" onclick="saveSPWasteStation()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    SUPABASE CONFIG — fill these in after creating your project
@@ -655,16 +836,29 @@ let tasks = [];
 let teamMembers = [];
 let currentTaskSubview = 'open';
 let currentAssetSubview = 'skip';
+let serviceProviders = [];
+let currentSPId = null;
+let currentSPSubtab = 'details';
+let currentSPPostcodeAreas = [];
+let spDocuments = [];
+let spTeamMembers = [];
+let spWasteStations = [];
 let assetsMapView = false;
 let leafletMapInstance = null;
 let leafletMarkersLayer = null;
 const DEAL_STAGES = [
-  {key:'lead', label:'Lead'},
-  {key:'contacted', label:'Contacted'},
-  {key:'proposal', label:'Proposal'},
-  {key:'negotiation', label:'Negotiation'},
-  {key:'won', label:'Won'},
-  {key:'lost', label:'Lost'}
+  {key:'lead', label:'Lead', color:'var(--slate)', bg:'var(--paper-card-alt)',
+    description:'A new potential customer or opportunity that hasn\'t been contacted yet.'},
+  {key:'contacted', label:'Contacted', color:'var(--stamp-blue)', bg:'var(--stamp-blue-bg)',
+    description:'Initial contact has been made — you\'re waiting to hear back or arranging next steps.'},
+  {key:'proposal', label:'Proposal', color:'var(--brass)', bg:'#FDF6E3',
+    description:'A formal quote or proposal has been sent and is awaiting a decision.'},
+  {key:'negotiation', label:'Negotiation', color:'var(--stamp-orange)', bg:'var(--stamp-orange-bg)',
+    description:'Pricing, terms, or contract details are actively being discussed.'},
+  {key:'won', label:'Won', color:'var(--stamp-green)', bg:'var(--stamp-green-bg)',
+    description:'The deal is confirmed — the customer has agreed to go ahead.'},
+  {key:'lost', label:'Lost', color:'var(--stamp-red)', bg:'var(--stamp-red-bg)',
+    description:'The deal didn\'t go ahead, whether down to budget, timing, or the customer\'s decision.'}
 ];
 
 function showToast(msg, isError){
@@ -722,6 +916,7 @@ async function afterLogin(user){
   await loadQuotes();
   await loadTeamMembers();
   await loadTasks();
+  await loadServiceProviders();
   renderContacts();
 }
 
@@ -743,6 +938,7 @@ function switchView(view){
   document.getElementById('view-quotes').classList.toggle('active', view==='quotes');
   document.getElementById('view-onboarding').classList.toggle('active', view==='onboarding');
   document.getElementById('view-assets').classList.toggle('active', view==='assets');
+  document.getElementById('view-serviceproviders').classList.toggle('active', view==='serviceproviders');
   document.getElementById('view-tasks').classList.toggle('active', view==='tasks');
   document.getElementById('view-team').classList.toggle('active', view==='team');
   if(view==='team') renderTeam();
@@ -751,6 +947,7 @@ function switchView(view){
   if(view==='quotes') showQuoteList();
   if(view==='onboarding') showOnboardingList();
   if(view==='assets') renderAssets();
+  if(view==='serviceproviders') showServiceProvidersList();
   if(view==='tasks') renderTasks();
 }
 
@@ -938,22 +1135,36 @@ function contactName(id){
   return c ? c.name : '';
 }
 
+function openStageInfo(stageKey){
+  const stage = DEAL_STAGES.find(s=>s.key===stageKey);
+  if(!stage) return;
+  document.getElementById('stageInfoTitle').textContent = stage.label;
+  document.getElementById('stageInfoDescription').textContent = stage.description;
+  document.getElementById('stageInfoModalOverlay').classList.add('active');
+}
+
 function renderPipeline(){
   const board = document.getElementById('kanbanBoard');
   let html = '';
   DEAL_STAGES.forEach(stage=>{
     const stageDeals = deals.filter(d=>d.stage===stage.key);
-    html += '<div class="kanban-col">';
-    html += '<div class="kanban-col-title"><span>'+stage.label+'</span><span>'+stageDeals.length+'</span></div>';
+    const total = stageDeals.reduce((sum,d)=> sum + (Number(d.value)||0), 0);
+    html += '<div class="kanban-col" style="--stage-color:'+stage.color+';--stage-bg:'+stage.bg+';">';
+    html += '<div class="kanban-col-head">';
+    html += '<div class="kanban-col-title-row"><span class="kanban-col-title">'+stage.label+' <span class="stage-info-icon" onclick="event.stopPropagation();openStageInfo(\''+stage.key+'\')" title="What does this stage mean?">i</span></span><span class="kanban-col-count">'+stageDeals.length+'</span></div>';
+    html += '<div class="kanban-col-total">'+(total ? '£'+total.toLocaleString() : '—')+'</div>';
+    html += '</div>';
+    html += '<div class="kanban-col-body">';
+    if(stageDeals.length===0){
+      html += '<div class="kanban-empty-col">No deals here</div>';
+    }
     stageDeals.forEach(d=>{
-      html += '<div class="kanban-card" onclick="openDealModal(\''+d.id+'\')">';
+      html += '<div class="kanban-card" style="--stage-color:'+stage.color+';" onclick="openDealModal(\''+d.id+'\')">';
       html += '<p class="kanban-card-title">'+escapeHtml(d.title)+'</p>';
-      const bits = [];
-      if(d.value) bits.push('£'+Number(d.value).toLocaleString());
-      if(d.contact_id) bits.push(escapeHtml(contactName(d.contact_id)));
-      html += '<p class="kanban-card-value">'+(bits.join(' · ')||'—')+'</p>';
+      html += '<div class="kanban-card-value"><span>'+(d.contact_id ? escapeHtml(contactName(d.contact_id)) : '—')+'</span>'+(d.value ? '<span>£'+Number(d.value).toLocaleString()+'</span>' : '')+'</div>';
       html += '</div>';
     });
+    html += '</div>';
     html += '</div>';
   });
   board.innerHTML = html;
@@ -1128,6 +1339,7 @@ function openOrganisationDetail(orgId){
     : '<p style="color:var(--slate);font-size:13px;">No details added yet. Click "Edit details" to fill these in.</p>';
 
   renderOrgContactsSection(orgId);
+  renderOrgQuotesSection(orgId);
   renderTasksForOrgInto(orgId, 'orgDetailTasks');
 
   document.getElementById('organisationsListMode').style.display = 'none';
@@ -1149,6 +1361,39 @@ function renderOrgContactsSection(orgId){
     html += '</div>';
   });
   container.innerHTML = html;
+}
+
+function renderOrgQuotesSection(orgId){
+  const container = document.getElementById('orgDetailQuotes');
+  const contactIds = contacts.filter(c=>c.organisation_id===orgId).map(c=>c.id);
+  const orgQuotes = quotes.filter(q=>contactIds.includes(q.contactId)).sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+  if(orgQuotes.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No quotes sent to this organisation yet.</p>';
+    return;
+  }
+  let html = '';
+  orgQuotes.forEach(q=>{
+    const pct = Number(q.adjustmentPct) || 0;
+    const total = q.items.reduce((sum, it)=> sum + round2(it.basePrice * (1 + pct/100)), 0);
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openQuoteFromOrgPage(\''+q.id+'\')">';
+    html += '<div><span style="font-weight:600;">'+quoteRefLabel(q)+'</span>';
+    html += '<div style="font-size:11.5px;color:var(--slate);margin-top:2px;">'+escapeHtml(contactName(q.contactId)||'—')+' · '+new Date(q.createdAt).toLocaleDateString('en-GB')+' · '+q.items.length+' service'+(q.items.length===1?'':'s')+'</div></div>';
+    html += '<div style="text-align:right;"><div style="font-weight:600;">'+fmtMoney(total)+'</div><span class="badge '+(q.status==='sent'?'user':'manager')+'">'+q.status+'</span></div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function openQuoteFromOrgPage(quoteId){
+  switchView('quotes');
+  openQuoteBuilder(quoteId);
+}
+
+function addQuoteForCurrentOrg(){
+  if(!currentOrgPageOrgId) return;
+  const orgContacts = contacts.filter(c=>c.organisation_id===currentOrgPageOrgId);
+  switchView('quotes');
+  openQuoteBuilder(null, orgContacts.length===1 ? orgContacts[0].id : null);
 }
 
 function editOrgFromOrgPage(){
@@ -1605,7 +1850,7 @@ function switchAssetSubview(view){
   document.getElementById('assetsAddBtn').textContent = view==='skip' ? '+ New smart skip' : '+ New collection point';
   document.getElementById('assetSearch').placeholder = view==='skip'
     ? 'Search by asset number, customer, address, or postcode' : 'Search by asset number, housing association, address, or branch';
-  document.getElementById('assetsMapToggleBtn').style.display = view==='skip' ? 'inline-flex' : 'none';
+  document.getElementById('assetsMapToggleBtn').style.display = 'inline-flex';
   showAssetsListView();
   renderAssets();
 }
@@ -1670,17 +1915,31 @@ function toggleAssetsMapView(){
   renderAssetsMap();
 }
 
+/* Collection points don't have a dedicated postcode field — their postcode
+   is usually written at the end of the address instead. This pulls it out. */
+function extractPostcodeFromAddress(address){
+  if(!address) return '';
+  const match = address.match(/([Gg][Ii][Rr] 0[Aa]{2})|((?:[A-Za-z][0-9]{1,2})|(?:[A-Za-z][A-Ha-hJ-Yj-y][0-9]{1,2})|(?:[A-Za-z][0-9][A-Za-z])|(?:[A-Za-z][A-Ha-hJ-Yj-y][0-9][A-Za-z]?))\s?[0-9][A-Za-z]{2}\b/);
+  return match ? match[0].trim() : '';
+}
+
+function geocodableValue(asset){
+  return (asset.postcode && asset.postcode.trim()) || extractPostcodeFromAddress(asset.address);
+}
+
 async function renderAssetsMap(){
   const q = (document.getElementById('assetSearch').value || '').toLowerCase();
   const statusEl = document.getElementById('assetsMapStatus');
-  const skipsToShow = assets.filter(a=>{
-    if((a.assetType||'skip') !== 'skip') return false;
+  const typeLabel = currentAssetSubview==='skip' ? 'smart skips' : 'collection points';
+  const toShow = assets.filter(a=>{
+    if((a.assetType||'skip') !== currentAssetSubview) return false;
     if(!q) return true;
     return (a.assetNumber||'').toLowerCase().includes(q) || (a.customerName||'').toLowerCase().includes(q) ||
-           (a.address||'').toLowerCase().includes(q) || (a.postcode||'').toLowerCase().includes(q);
+           (a.address||'').toLowerCase().includes(q) || (a.postcode||'').toLowerCase().includes(q) ||
+           (a.housingAssociation||'').toLowerCase().includes(q) || (a.branch||'').toLowerCase().includes(q);
   });
 
-  const withPostcode = skipsToShow.filter(a=>a.postcode && a.postcode.trim());
+  const withPostcode = toShow.filter(a=>geocodableValue(a));
   const needGeocode = withPostcode.filter(a=>!a.latitude || !a.longitude);
 
   if(needGeocode.length > 0){
@@ -1689,9 +1948,9 @@ async function renderAssetsMap(){
   }
 
   const withCoords = withPostcode.filter(a=>a.latitude && a.longitude);
-  const missingCount = skipsToShow.length - withCoords.length;
-  statusEl.textContent = 'Showing ' + withCoords.length + ' of ' + skipsToShow.length + ' smart skips on the map'
-    + (missingCount > 0 ? ' (' + missingCount + ' skipped — no valid postcode on file)' : '') + '.';
+  const missingCount = toShow.length - withCoords.length;
+  statusEl.textContent = 'Showing ' + withCoords.length + ' of ' + toShow.length + ' ' + typeLabel + ' on the map'
+    + (missingCount > 0 ? ' (' + missingCount + ' skipped — no usable postcode on file)' : '') + '.';
 
   if(!leafletMapInstance){
     leafletMapInstance = L.map('assetsMap');
@@ -1711,13 +1970,13 @@ async function renderAssetsMap(){
   const bounds = [];
   withCoords.forEach(a=>{
     const marker = L.marker([a.latitude, a.longitude]);
+    const line2 = currentAssetSubview==='skip' ? a.customerName : a.housingAssociation;
     marker.bindPopup(
       '<b>' + escapeHtml(a.assetNumber||'—') + '</b><br>' +
-      escapeHtml(a.customerName||'') + (a.customerName ? '<br>' : '') +
-      escapeHtml(a.address||'') + (a.address ? '<br>' : '') +
+      (line2 ? escapeHtml(line2) + '<br>' : '') +
+      (a.address ? escapeHtml(a.address) + '<br>' : '') +
       escapeHtml(a.postcode||'')
     );
-    marker.on('click', ()=>{ /* no-op: popup shows details, click the row in list view to edit */ });
     leafletMarkersLayer.addLayer(marker);
     bounds.push([a.latitude, a.longitude]);
   });
@@ -1733,7 +1992,7 @@ async function geocodeAssetPostcodes(assetsNeedingGeocode){
       const res = await fetch('https://api.postcodes.io/postcodes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postcodes: chunk.map(a=>a.postcode.trim()) })
+        body: JSON.stringify({ postcodes: chunk.map(a=>geocodableValue(a)) })
       });
       const data = await res.json();
       if(!data || !data.result) continue;
@@ -1840,6 +2099,454 @@ async function deleteAsset(){
   showToast('Asset deleted.');
 }
 
+/* ---------- Service Providers ---------- */
+async function loadServiceProviders(){
+  const { data, error } = await sb.from('service_providers').select('*').order('name');
+  if(error){ showToast('Could not load service providers: ' + error.message, true); return; }
+  serviceProviders = data || [];
+}
+
+function showServiceProvidersList(){
+  document.getElementById('spListMode').style.display = 'block';
+  document.getElementById('spDetailMode').style.display = 'none';
+  currentSPId = null;
+  renderServiceProvidersList();
+}
+
+function renderServiceProvidersList(){
+  const q = (document.getElementById('spSearch').value || '').toLowerCase();
+  const container = document.getElementById('spListContainer');
+  const filtered = serviceProviders.filter(sp=>!q || sp.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+  if(filtered.length===0){
+    container.innerHTML = '<div class="empty-state">' + (serviceProviders.length===0 ? 'No service providers yet. Add your first one.' : 'No service providers match that search.') + '</div>';
+    return;
+  }
+  let html = '<table class="qtable"><thead><tr><th>Company</th><th>Phone</th><th>Waste carriers licence</th></tr></thead><tbody>';
+  filtered.forEach(sp=>{
+    html += '<tr onclick="openServiceProviderDetail(\''+sp.id+'\')" style="cursor:pointer;">';
+    html += '<td><b>'+escapeHtml(sp.name)+'</b></td>';
+    html += '<td>'+escapeHtml(sp.phone||'—')+'</td>';
+    html += '<td>'+escapeHtml(sp.waste_carriers_licence_number||'—')+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function onSPVatToggleChange(){
+  document.getElementById('spVatNumberField').style.display = document.getElementById('spVatRegistered').value==='yes' ? 'block' : 'none';
+}
+function onSPBusinessTypeChange(){
+  document.getElementById('spCompanyNumberField').style.display = document.getElementById('spBusinessType').value==='company' ? 'block' : 'none';
+}
+
+function switchSPSubtab(tab){
+  currentSPSubtab = tab;
+  document.querySelectorAll('#view-serviceproviders .subtab').forEach(el=>el.classList.toggle('active', el.dataset.sptab===tab));
+  ['details','documents','team','wts'].forEach(t=>{
+    document.getElementById('spSubtab-'+t).style.display = (t===tab) ? 'block' : 'none';
+  });
+}
+
+async function openServiceProviderDetail(id){
+  currentSPId = id;
+  const row = id ? serviceProviders.find(x=>x.id===id) : null;
+  document.getElementById('spDetailTitle').textContent = row ? row.name : 'New service provider';
+  document.getElementById('spId').value = id || '';
+  document.getElementById('spName').value = row ? row.name : '';
+  document.getElementById('spAddr1').value = row ? (row.address_line1||'') : '';
+  document.getElementById('spAddr2').value = row ? (row.address_line2||'') : '';
+  document.getElementById('spCity').value = row ? (row.city||'') : '';
+  document.getElementById('spCounty').value = row ? (row.county||'') : '';
+  document.getElementById('spPostcode').value = row ? (row.postcode||'') : '';
+  document.getElementById('spLicenceNumber').value = row ? (row.waste_carriers_licence_number||'') : '';
+  document.getElementById('spEmail').value = row ? (row.email||'') : '';
+  document.getElementById('spPhone').value = row ? (row.phone||'') : '';
+  document.getElementById('spVatRegistered').value = (row && row.vat_registered) ? 'yes' : 'no';
+  document.getElementById('spVatNumber').value = row ? (row.vat_number||'') : '';
+  document.getElementById('spBusinessType').value = row ? (row.business_type||'sole_trader') : 'sole_trader';
+  document.getElementById('spCompanyNumber').value = row ? (row.company_number||'') : '';
+  document.getElementById('spNotes').value = row ? (row.notes||'') : '';
+  onSPVatToggleChange();
+  onSPBusinessTypeChange();
+  document.getElementById('spDeleteBtn').style.display = row ? 'inline-flex' : 'none';
+
+  currentSPPostcodeAreas = [];
+  if(id){
+    const { data } = await sb.from('service_provider_postcodes').select('*').eq('service_provider_id', id).order('postcode_area');
+    currentSPPostcodeAreas = (data||[]).map(p=>p.postcode_area);
+  }
+  renderSPPostcodeAreas();
+
+  document.getElementById('spListMode').style.display = 'none';
+  document.getElementById('spDetailMode').style.display = 'block';
+  switchSPSubtab('details');
+
+  if(id){
+    await loadSPDocuments(id);
+    await loadSPTeamMembers(id);
+    await loadSPWasteStations(id);
+  }else{
+    spDocuments = []; spTeamMembers = []; spWasteStations = [];
+    renderSPDocuments(); renderSPTeamMembers(); renderSPWasteStations();
+  }
+}
+
+function renderSPPostcodeAreas(){
+  const container = document.getElementById('spPostcodeAreaList');
+  if(currentSPPostcodeAreas.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:12.5px;">No postcode areas added yet.</p>';
+    return;
+  }
+  container.innerHTML = currentSPPostcodeAreas.map((pc,i)=>
+    '<span class="postcode-chip">'+escapeHtml(pc)+'<span class="postcode-chip-remove" onclick="removeSPPostcodeArea('+i+')">✕</span></span>'
+  ).join('');
+}
+
+function addSPPostcodeArea(){
+  const input = document.getElementById('spPostcodeAreaInput');
+  let val = input.value.trim().toUpperCase();
+  if(!val) return;
+  val = val.split(' ')[0]; // keep just the outward code, e.g. "TR4 9EG" -> "TR4"
+  if(!currentSPPostcodeAreas.includes(val)){
+    currentSPPostcodeAreas.push(val);
+  }
+  input.value = '';
+  renderSPPostcodeAreas();
+}
+
+function removeSPPostcodeArea(index){
+  currentSPPostcodeAreas.splice(index, 1);
+  renderSPPostcodeAreas();
+}
+
+async function saveServiceProvider(){
+  const name = document.getElementById('spName').value.trim();
+  if(!name){ showToast('Company name is required.', true); return; }
+  const payload = {
+    name,
+    address_line1: document.getElementById('spAddr1').value.trim(),
+    address_line2: document.getElementById('spAddr2').value.trim(),
+    city: document.getElementById('spCity').value.trim(),
+    county: document.getElementById('spCounty').value.trim(),
+    postcode: document.getElementById('spPostcode').value.trim(),
+    waste_carriers_licence_number: document.getElementById('spLicenceNumber').value.trim(),
+    email: document.getElementById('spEmail').value.trim(),
+    phone: document.getElementById('spPhone').value.trim(),
+    vat_registered: document.getElementById('spVatRegistered').value === 'yes',
+    vat_number: document.getElementById('spVatNumber').value.trim(),
+    business_type: document.getElementById('spBusinessType').value,
+    company_number: document.getElementById('spCompanyNumber').value.trim(),
+    notes: document.getElementById('spNotes').value.trim()
+  };
+  let error, id = currentSPId;
+  if(currentSPId){
+    ({ error } = await sb.from('service_providers').update(payload).eq('id', currentSPId));
+  }else{
+    const res = await sb.from('service_providers').insert(payload).select().single();
+    error = res.error;
+    if(res.data) id = res.data.id;
+  }
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  currentSPId = id;
+
+  await sb.from('service_provider_postcodes').delete().eq('service_provider_id', id);
+  if(currentSPPostcodeAreas.length){
+    await sb.from('service_provider_postcodes').insert(currentSPPostcodeAreas.map(pc=>({service_provider_id:id, postcode_area:pc})));
+  }
+
+  await loadServiceProviders();
+  document.getElementById('spDetailTitle').textContent = name;
+  document.getElementById('spDeleteBtn').style.display = 'inline-flex';
+  showToast('Service provider saved.');
+  await loadSPDocuments(id);
+  await loadSPTeamMembers(id);
+  await loadSPWasteStations(id);
+}
+
+async function deleteServiceProvider(){
+  if(!currentSPId) return;
+  if(!confirm('Delete this service provider? This will also delete all their documents, team members, and waste transfer stations. This cannot be undone.')) return;
+  for(const doc of spDocuments){
+    await sb.storage.from('service-provider-documents').remove([doc.file_path]);
+  }
+  const { error } = await sb.from('service_providers').delete().eq('id', currentSPId);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  await loadServiceProviders();
+  showToast('Service provider deleted.');
+  showServiceProvidersList();
+}
+
+/* ---- Documents ---- */
+async function loadSPDocuments(spId){
+  const { data, error } = await sb.from('service_provider_documents').select('*').eq('service_provider_id', spId).order('created_at', {ascending:false});
+  if(error){ showToast('Could not load documents: ' + error.message, true); return; }
+  spDocuments = data || [];
+  renderSPDocuments();
+}
+
+function renderSPDocuments(){
+  const container = document.getElementById('spDocumentsList');
+  if(!currentSPId){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then documents can be added here.</p>';
+    return;
+  }
+  if(spDocuments.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No documents uploaded yet.</p>';
+    return;
+  }
+  const today = new Date().toISOString().slice(0,10);
+  let html = '';
+  spDocuments.forEach(doc=>{
+    const isExpired = doc.expiry_date && doc.expiry_date < today;
+    html += '<div class="doc-row">';
+    html += '<div style="cursor:pointer;" onclick="openSPDocumentModal(\''+doc.id+'\')"><div class="doc-row-name">'+escapeHtml(doc.document_name)+'</div>';
+    html += '<div class="doc-row-meta'+(isExpired?' doc-row-expired':'')+'">'+(doc.expiry_date ? ('Expires '+new Date(doc.expiry_date).toLocaleDateString('en-GB')+(isExpired?' — EXPIRED':'')) : 'No expiry reminder set')+'</div></div>';
+    html += '<button class="btn ghost small" onclick="event.stopPropagation();downloadSPDocument(\''+doc.id+'\')">Download</button>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+async function downloadSPDocument(docId){
+  const doc = spDocuments.find(d=>d.id===docId);
+  if(!doc) return;
+  const { data, error } = await sb.storage.from('service-provider-documents').createSignedUrl(doc.file_path, 60);
+  if(error){ showToast('Could not open file: ' + error.message, true); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
+function openSPDocumentModal(id){
+  const doc = id ? spDocuments.find(d=>d.id===id) : null;
+  document.getElementById('spDocumentId').value = id || '';
+  document.getElementById('spDocumentModalTitle').textContent = doc ? 'Edit document' : 'Upload document';
+  document.getElementById('spDocumentName').value = doc ? doc.document_name : '';
+  document.getElementById('spDocumentExpiryDate').value = doc ? (doc.expiry_date||'') : '';
+  document.getElementById('spDocumentFile').value = '';
+  document.getElementById('spDocumentFileField').style.display = doc ? 'none' : 'block';
+  document.getElementById('spDocumentSaveBtn').textContent = doc ? 'Save changes' : 'Upload';
+  document.getElementById('spDocumentDeleteBtn').style.display = doc ? 'inline-flex' : 'none';
+  document.getElementById('spDocumentModalError').style.display = 'none';
+  document.getElementById('spDocumentModalOverlay').classList.add('active');
+}
+
+async function saveSPDocument(){
+  const id = document.getElementById('spDocumentId').value;
+  const name = document.getElementById('spDocumentName').value.trim();
+  const expiryDate = document.getElementById('spDocumentExpiryDate').value || null;
+  const errEl = document.getElementById('spDocumentModalError');
+  errEl.style.display = 'none';
+  if(!name){ errEl.textContent = 'Document name is required.'; errEl.style.display = 'block'; return; }
+
+  if(id){
+    const existing = spDocuments.find(d=>d.id===id);
+    const hadExpiry = existing && existing.expiry_date;
+    const { error } = await sb.from('service_provider_documents').update({ document_name: name, expiry_date: expiryDate }).eq('id', id);
+    if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+    if(expiryDate && !hadExpiry){
+      await createDocumentExpiryTask(existing.service_provider_id, name, expiryDate);
+    }
+  }else{
+    const fileInput = document.getElementById('spDocumentFile');
+    const file = fileInput.files[0];
+    if(!file){ errEl.textContent = 'Choose a file to upload.'; errEl.style.display = 'block'; return; }
+    const btn = document.getElementById('spDocumentSaveBtn');
+    btn.disabled = true; btn.textContent = 'Uploading…';
+    const path = currentSPId + '/' + Date.now() + '-' + file.name;
+    const { error: uploadErr } = await sb.storage.from('service-provider-documents').upload(path, file);
+    if(uploadErr){
+      btn.disabled = false; btn.textContent = 'Upload';
+      errEl.textContent = 'Could not upload file: ' + uploadErr.message; errEl.style.display = 'block'; return;
+    }
+    const { error } = await sb.from('service_provider_documents').insert({
+      service_provider_id: currentSPId, document_name: name, file_path: path, original_file_name: file.name,
+      expiry_date: expiryDate, uploaded_by: currentUser.id
+    });
+    btn.disabled = false; btn.textContent = 'Upload';
+    if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+    if(expiryDate){
+      await createDocumentExpiryTask(currentSPId, name, expiryDate);
+    }
+  }
+
+  closeModal('spDocumentModalOverlay');
+  await loadSPDocuments(currentSPId);
+  showToast('Document saved.');
+}
+
+async function createDocumentExpiryTask(spId, documentName, expiryDate){
+  const sp = serviceProviders.find(s=>s.id===spId);
+  const spName = sp ? sp.name : 'service provider';
+  const { error } = await sb.from('tasks').insert({
+    title: 'Renew "'+documentName+'" for '+spName,
+    notes: 'Document expires ' + new Date(expiryDate).toLocaleDateString('en-GB') + '. Get an updated copy from the service provider.',
+    assigned_to: currentUser.id,
+    created_by: currentUser.id,
+    status: 'todo',
+    due_date: expiryDate
+  });
+  if(error){ showToast('Document saved, but the reminder task could not be created: ' + error.message, true); return; }
+  await loadTasks();
+  showToast('A reminder task has been created for this expiry date.');
+}
+
+async function deleteSPDocument(){
+  const id = document.getElementById('spDocumentId').value;
+  if(!id) return;
+  if(!confirm('Delete this document? This cannot be undone.')) return;
+  const doc = spDocuments.find(d=>d.id===id);
+  if(doc){
+    await sb.storage.from('service-provider-documents').remove([doc.file_path]);
+  }
+  const { error } = await sb.from('service_provider_documents').delete().eq('id', id);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  closeModal('spDocumentModalOverlay');
+  await loadSPDocuments(currentSPId);
+  showToast('Document deleted.');
+}
+
+/* ---- Team members ---- */
+async function loadSPTeamMembers(spId){
+  const { data, error } = await sb.from('service_provider_team_members').select('*').eq('service_provider_id', spId).order('name');
+  if(error){ showToast('Could not load team members: ' + error.message, true); return; }
+  spTeamMembers = data || [];
+  renderSPTeamMembers();
+}
+
+function renderSPTeamMembers(){
+  const container = document.getElementById('spTeamList');
+  if(!currentSPId){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then team members can be added here.</p>';
+    return;
+  }
+  if(spTeamMembers.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No team members added yet.</p>';
+    return;
+  }
+  let html = '';
+  spTeamMembers.forEach(m=>{
+    html += '<div class="doc-row" style="cursor:pointer;" onclick="openSPTeamMemberModal(\''+m.id+'\')">';
+    html += '<div><div class="doc-row-name">'+escapeHtml(m.name)+'</div>';
+    html += '<div class="doc-row-meta">'+escapeHtml([m.email, m.phone].filter(Boolean).join(' · ')||'—')+'</div></div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function openSPTeamMemberModal(id){
+  const m = id ? spTeamMembers.find(x=>x.id===id) : null;
+  document.getElementById('spTeamMemberId').value = id || '';
+  document.getElementById('spTeamMemberModalTitle').textContent = m ? 'Edit team member' : 'New team member';
+  document.getElementById('spTeamMemberName').value = m ? m.name : '';
+  document.getElementById('spTeamMemberEmail').value = m ? (m.email||'') : '';
+  document.getElementById('spTeamMemberPhone').value = m ? (m.phone||'') : '';
+  document.getElementById('spTeamMemberDeleteBtn').style.display = m ? 'inline-flex' : 'none';
+  document.getElementById('spTeamMemberModalOverlay').classList.add('active');
+}
+
+async function saveSPTeamMember(){
+  const id = document.getElementById('spTeamMemberId').value;
+  const name = document.getElementById('spTeamMemberName').value.trim();
+  if(!name){ showToast('Name is required.', true); return; }
+  const payload = {
+    name,
+    email: document.getElementById('spTeamMemberEmail').value.trim(),
+    phone: document.getElementById('spTeamMemberPhone').value.trim()
+  };
+  let error;
+  if(id){
+    ({ error } = await sb.from('service_provider_team_members').update(payload).eq('id', id));
+  }else{
+    payload.service_provider_id = currentSPId;
+    ({ error } = await sb.from('service_provider_team_members').insert(payload));
+  }
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  closeModal('spTeamMemberModalOverlay');
+  await loadSPTeamMembers(currentSPId);
+  showToast('Team member saved.');
+}
+
+async function deleteSPTeamMember(){
+  const id = document.getElementById('spTeamMemberId').value;
+  if(!id) return;
+  if(!confirm('Delete this team member? This cannot be undone.')) return;
+  const { error } = await sb.from('service_provider_team_members').delete().eq('id', id);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  closeModal('spTeamMemberModalOverlay');
+  await loadSPTeamMembers(currentSPId);
+  showToast('Team member deleted.');
+}
+
+/* ---- Waste transfer stations ---- */
+async function loadSPWasteStations(spId){
+  const { data, error } = await sb.from('service_provider_waste_stations').select('*').eq('service_provider_id', spId).order('station_name');
+  if(error){ showToast('Could not load waste transfer stations: ' + error.message, true); return; }
+  spWasteStations = data || [];
+  renderSPWasteStations();
+}
+
+function renderSPWasteStations(){
+  const container = document.getElementById('spWasteStationsList');
+  if(!currentSPId){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then waste transfer stations can be added here.</p>';
+    return;
+  }
+  if(spWasteStations.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No waste transfer stations added yet.</p>';
+    return;
+  }
+  let html = '';
+  spWasteStations.forEach(w=>{
+    html += '<div class="doc-row" style="cursor:pointer;" onclick="openSPWasteStationModal(\''+w.id+'\')">';
+    html += '<div><div class="doc-row-name">'+escapeHtml(w.station_name)+'</div>';
+    html += '<div class="doc-row-meta">'+(w.licence_number ? 'Licence: '+escapeHtml(w.licence_number) : 'No licence number on file')+'</div></div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function openSPWasteStationModal(id){
+  const w = id ? spWasteStations.find(x=>x.id===id) : null;
+  document.getElementById('spWasteStationId').value = id || '';
+  document.getElementById('spWasteStationModalTitle').textContent = w ? 'Edit waste transfer station' : 'New waste transfer station';
+  document.getElementById('spWasteStationName').value = w ? w.station_name : '';
+  document.getElementById('spWasteStationLicence').value = w ? (w.licence_number||'') : '';
+  document.getElementById('spWasteStationDeleteBtn').style.display = w ? 'inline-flex' : 'none';
+  document.getElementById('spWasteStationModalOverlay').classList.add('active');
+}
+
+async function saveSPWasteStation(){
+  const id = document.getElementById('spWasteStationId').value;
+  const name = document.getElementById('spWasteStationName').value.trim();
+  if(!name){ showToast('Station name is required.', true); return; }
+  const payload = {
+    station_name: name,
+    licence_number: document.getElementById('spWasteStationLicence').value.trim()
+  };
+  let error;
+  if(id){
+    ({ error } = await sb.from('service_provider_waste_stations').update(payload).eq('id', id));
+  }else{
+    payload.service_provider_id = currentSPId;
+    ({ error } = await sb.from('service_provider_waste_stations').insert(payload));
+  }
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  closeModal('spWasteStationModalOverlay');
+  await loadSPWasteStations(currentSPId);
+  showToast('Waste transfer station saved.');
+}
+
+async function deleteSPWasteStation(){
+  const id = document.getElementById('spWasteStationId').value;
+  if(!id) return;
+  if(!confirm('Delete this waste transfer station? This cannot be undone.')) return;
+  const { error } = await sb.from('service_provider_waste_stations').delete().eq('id', id);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  closeModal('spWasteStationModalOverlay');
+  await loadSPWasteStations(currentSPId);
+  showToast('Waste transfer station deleted.');
+}
+
 /* ---------- Tasks ---------- */
 async function loadTeamMembers(){
   const { data, error } = await sb.from('profiles').select('id, name, email').order('name');
@@ -1866,20 +2573,30 @@ function switchTaskSubview(view){
 
 function renderTasks(){
   const container = document.getElementById('tasksListContainer');
+  const today = new Date().toISOString().slice(0,10);
   const filtered = tasks.filter(t=> currentTaskSubview==='open' ? t.status==='todo' : t.status==='done')
-    .sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+    .sort((a,b)=>{
+      if(currentTaskSubview==='open'){
+        if(a.due_date && b.due_date) return a.due_date < b.due_date ? -1 : 1;
+        if(a.due_date) return -1;
+        if(b.due_date) return 1;
+      }
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
   if(filtered.length===0){
     container.innerHTML = '<div class="empty-state">' + (currentTaskSubview==='open' ? 'No open tasks.' : 'No completed tasks yet.') + '</div>';
     return;
   }
-  let html = '<table class="qtable"><thead><tr><th></th><th>Task</th><th>Organisation</th><th>Assigned to</th><th>Created</th></tr></thead><tbody>';
+  let html = '<table class="qtable"><thead><tr><th></th><th>Task</th><th>Organisation</th><th>Assigned to</th><th>Due</th><th>Created</th></tr></thead><tbody>';
   filtered.forEach(t=>{
     const org = t.organisation_id ? organisations.find(o=>o.id===t.organisation_id) : null;
+    const isOverdue = t.due_date && t.due_date < today && t.status !== 'done';
     html += '<tr>';
     html += '<td onclick="event.stopPropagation();" style="width:32px;"><input type="checkbox" '+(t.status==='done'?'checked':'')+' onchange="toggleTaskDone(\''+t.id+'\', this.checked)"></td>';
     html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;"><b>'+escapeHtml(t.title)+'</b>'+(t.notes?'<div style="color:var(--slate);font-size:12px;margin-top:2px;">'+escapeHtml(t.notes)+'</div>':'')+'</td>';
     html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;">'+(org?escapeHtml(org.name):'—')+'</td>';
     html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;">'+(t.assigned_to?escapeHtml(teamMemberName(t.assigned_to)||'—'):'—')+'</td>';
+    html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;'+(isOverdue?'color:var(--stamp-red);font-weight:700;':'')+'">'+(t.due_date ? new Date(t.due_date).toLocaleDateString('en-GB')+(isOverdue?' (overdue)':'') : '—')+'</td>';
     html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;">'+new Date(t.created_at).toLocaleDateString('en-GB')+'</td>';
     html += '</tr>';
   });
@@ -2048,11 +2765,11 @@ function renderQuotesList(){
   container.innerHTML = html;
 }
 
-function openQuoteBuilder(id){
+function openQuoteBuilder(id, presetContactId){
   const existing = id ? quotes.find(x=>x.id===id) : null;
   currentQuote = existing
     ? JSON.parse(JSON.stringify(existing))
-    : {id:null, contactId:'', businessName:'Wascle', adjustmentPct:0, status:'draft', items:[]};
+    : {id:null, contactId: presetContactId || '', businessName:'Wascle', adjustmentPct:0, status:'draft', items:[]};
 
   document.getElementById('builderTitle').textContent = existing ? 'Edit quote' : 'New quote';
   document.getElementById('qAdjustment').value = currentQuote.adjustmentPct || 0;
@@ -2080,7 +2797,10 @@ function renderServicePicker(){
 
   let html = '';
   Object.keys(groups).forEach(cat=>{
-    html += '<p class="picker-category">'+escapeHtml(cat)+'</p>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;">'+
+      '<p class="picker-category">'+escapeHtml(cat)+'</p>'+
+      '<span class="btn ghost small" style="padding:3px 9px;font-size:11px;margin-bottom:8px;" onclick="addCategoryToCart(\''+escapeHtml(cat).replace(/'/g,"\\'")+'\')">+ Add all</span>'+
+      '</div>';
     groups[cat].forEach(s=>{
       html += '<div class="picker-item'+(inCart(s.name)?' in-cart':'')+'" onclick="addServiceToCart(\''+s.name.replace(/'/g,"\\'")+'\')">';
       html += '<span>'+escapeHtml(s.name)+'</span><span class="picker-item-price">'+fmtMoney(s.price)+'</span>';
@@ -2099,6 +2819,16 @@ function addServiceToCart(name){
   }else{
     currentQuote.items.push({name:svc.name, category:svc.category, basePrice:svc.price});
   }
+  renderServicePicker();
+  renderCart();
+}
+
+function addCategoryToCart(category){
+  SERVICES.filter(s=>s.category===category).forEach(s=>{
+    if(!currentQuote.items.some(it=>it.name===s.name)){
+      currentQuote.items.push({name:s.name, category:s.category, basePrice:s.price});
+    }
+  });
   renderServicePicker();
   renderCart();
 }
