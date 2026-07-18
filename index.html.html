@@ -131,6 +131,8 @@
   .icon-btn.danger:hover{background:var(--stamp-red-bg);border-color:var(--stamp-red);}
   .price-input{width:100px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:13px;text-align:right;background:var(--paper-card-alt);}
   .price-input:focus{border-color:var(--brass);outline:none;}
+  .service-group-item{display:flex;align-items:center;gap:7px;background:var(--paper-card-alt);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:600;cursor:pointer;}
+  .service-group-item input{width:16px;height:16px;}
   .subtab.active{border-bottom-color:var(--brass) !important;color:var(--ink);}
   .subtab{color:var(--slate);}
   .panel-box{background:var(--paper-card);border:1px solid var(--border);border-radius:8px;padding:16px;}
@@ -545,6 +547,10 @@
         </div>
 
         <div id="spSubtab-pricing" style="display:none;">
+          <div class="field">
+            <label>Which services does this provider carry out?</label>
+            <div id="spServiceGroupsList" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;"></div>
+          </div>
           <p style="font-size:13px;color:var(--slate);margin-top:0;">These are the rates we pay this service provider. Started from the default price list — edit any line below to change it just for them.</p>
           <div class="field-row" style="align-items:flex-end;">
             <div class="field" style="max-width:220px;"><label>Adjust all lines by (%)</label>
@@ -554,7 +560,7 @@
             <button class="btn ghost small" onclick="resetSPPricingToDefault()" style="margin-bottom:14px;">Reset to default pricing</button>
             <button class="btn small" onclick="downloadSPPricingPdf()" style="margin-bottom:14px;">Download pricing PDF</button>
           </div>
-          <div id="spPricingListContainer" style="max-height:calc(100vh - 340px);overflow-y:auto;"></div>
+          <div id="spPricingListContainer" style="max-height:calc(100vh - 400px);overflow-y:auto;"></div>
         </div>
       </div>
     </div>
@@ -905,6 +911,12 @@ let spTeamMembers = [];
 let spWasteStations = [];
 let spDefaultPricing = [];
 let spProviderPricing = [];
+let currentSPServiceGroups = [];
+const SP_SERVICE_GROUPS = [
+  { key: 'smart_skips', label: 'Smart skips', categories: ['Price per cubic yard', 'Chargeable extras', 'Smart skips'] },
+  { key: 'property_clearance', label: 'Property clearance', categories: ['Property clearance'] },
+  { key: 'waste_bags', label: 'Waste bags', categories: ['Waste bags'] }
+];
 let assetsMapView = false;
 let leafletMapInstance = null;
 let leafletMarkersLayer = null;
@@ -2251,6 +2263,9 @@ async function openServiceProviderDetail(id){
   document.getElementById('spDetailMode').style.display = 'block';
   switchSPSubtab('details');
 
+  currentSPServiceGroups = row ? (row.service_groups || []) : [];
+  renderSPServiceGroups();
+
   if(id){
     await loadSPDocuments(id);
     await loadSPTeamMembers(id);
@@ -2720,19 +2735,51 @@ async function loadSPPricing(spId){
   renderSPPricingList();
 }
 
+function renderSPServiceGroups(){
+  const container = document.getElementById('spServiceGroupsList');
+  container.innerHTML = SP_SERVICE_GROUPS.map(g=>{
+    const checked = currentSPServiceGroups.includes(g.key);
+    return '<label class="service-group-item"><input type="checkbox" '+(checked?'checked':'')+' onchange="toggleSPServiceGroup(\''+g.key+'\', this.checked)">'+escapeHtml(g.label)+'</label>';
+  }).join('');
+}
+
+async function toggleSPServiceGroup(key, checked){
+  if(!currentSPId){ showToast('Save this service provider first.', true); renderSPServiceGroups(); return; }
+  if(checked && !currentSPServiceGroups.includes(key)){
+    currentSPServiceGroups.push(key);
+  }else if(!checked){
+    currentSPServiceGroups = currentSPServiceGroups.filter(k=>k!==key);
+  }
+  const { error } = await sb.from('service_providers').update({ service_groups: currentSPServiceGroups }).eq('id', currentSPId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadServiceProviders();
+  renderSPPricingList();
+}
+
+function spVisiblePricingRows(){
+  const enabledCategories = new Set();
+  SP_SERVICE_GROUPS.forEach(g=>{ if(currentSPServiceGroups.includes(g.key)) g.categories.forEach(c=>enabledCategories.add(c)); });
+  return spProviderPricing.filter(r=>enabledCategories.has(r.category));
+}
+
 function renderSPPricingList(){
   const container = document.getElementById('spPricingListContainer');
   if(!currentSPId){
     container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then their pricing sheet can be set up here.</p>';
     return;
   }
-  if(spProviderPricing.length===0){
+  if(currentSPServiceGroups.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Select which services this provider carries out above to set their pricing.</p>';
+    return;
+  }
+  const visible = spVisiblePricingRows();
+  if(visible.length===0){
     container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No pricing set up yet.</p>';
     return;
   }
   const groups = {};
   const order = [];
-  spProviderPricing.forEach(row=>{
+  visible.forEach(row=>{
     const cat = row.category || 'Other';
     if(!groups[cat]){ groups[cat] = []; order.push(cat); }
     groups[cat].push(row);
@@ -2774,7 +2821,8 @@ async function applySPPricingBulkAdjust(){
   if(!currentSPId || spProviderPricing.length===0) return;
   const pct = Number(document.getElementById('spPricingBulkAdjust').value);
   if(!pct){ showToast('Enter a percentage to apply first.', true); return; }
-  for(const row of spProviderPricing){
+  const visible = spVisiblePricingRows();
+  for(const row of visible){
     if(row.is_active === false) continue;
     row.rate = round2(row.rate * (1 + pct/100));
     await sb.from('service_provider_pricing').update({ rate: row.rate }).eq('id', row.id);
@@ -2796,7 +2844,7 @@ async function resetSPPricingToDefault(){
 function downloadSPPricingPdf(){
   if(!currentSPId) return;
   const sp = serviceProviders.find(s=>s.id===currentSPId);
-  const activeItems = spProviderPricing.filter(r=>r.is_active !== false);
+  const activeItems = spVisiblePricingRows().filter(r=>r.is_active !== false);
   if(!sp || activeItems.length===0){ showToast('No included pricing lines to put in the PDF.', true); return; }
   const items = activeItems.map(r=>({ name: r.service_name, category: r.category, basePrice: r.rate }));
   const pseudoQuote = { id: sp.id, contactId: null, createdAt: Date.now(), adjustmentPct: 0, items };
