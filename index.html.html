@@ -152,6 +152,7 @@
   <div class="sidebar">
     <div class="sidebar-logo">Docket</div>
     <div class="nav-item active" data-view="contacts" onclick="switchView('contacts')">Contacts</div>
+    <div class="nav-item" data-view="organisations" onclick="switchView('organisations')">Organisations</div>
     <div class="nav-item" data-view="pipeline" onclick="switchView('pipeline')">Pipeline</div>
     <div class="nav-item" data-view="quotes" onclick="switchView('quotes')">Quotes</div>
     <div class="nav-item" data-view="onboarding" onclick="switchView('onboarding')">Onboarding</div>
@@ -177,6 +178,46 @@
       </div>
       <input class="search-input" id="contactSearch" placeholder="Search by name, organisation, or email" oninput="renderContacts()">
       <div id="contactsContainer"></div>
+    </div>
+
+    <!-- ---------- ORGANISATIONS VIEW ---------- -->
+    <div id="view-organisations" class="view">
+      <div id="organisationsListMode">
+        <div class="view-header">
+          <div>
+            <p class="view-title">Organisations</p>
+            <p class="view-sub">Every organisation in Docket — contacts, tasks, and onboarding status all in one place.</p>
+          </div>
+          <button class="btn small" onclick="createNewOrganisationFromOrgPage()">+ New organisation</button>
+        </div>
+        <input class="search-input" id="organisationsSearch" placeholder="Search by organisation name" oninput="renderOrganisationsList()">
+        <div id="organisationsListContainer"></div>
+      </div>
+
+      <div id="organisationDetailMode" style="display:none;">
+        <div class="view-header">
+          <div>
+            <p class="view-title"><span id="orgDetailTitle"></span><span id="orgDetailLiveBadge" class="live-badge" style="display:none;">LIVE</span></p>
+            <p class="view-sub" id="orgDetailSub"></p>
+          </div>
+          <button class="btn ghost small" onclick="showOrganisationsList()">← Back</button>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Details</span><button class="btn ghost small" onclick="editOrgFromOrgPage()">Edit details</button></div>
+          <div id="orgDetailSummary"></div>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Contacts</span><button class="btn ghost small" onclick="addContactForCurrentOrg()">+ Add contact</button></div>
+          <div id="orgDetailContacts"></div>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Tasks</span><button class="btn ghost small" onclick="addTaskForCurrentOrg()">+ Add task</button></div>
+          <div id="orgDetailTasks"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ---------- PIPELINE VIEW ---------- -->
@@ -685,6 +726,7 @@ checkExistingSession();
 function switchView(view){
   document.querySelectorAll('.nav-item[data-view]').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
   document.getElementById('view-contacts').classList.toggle('active', view==='contacts');
+  document.getElementById('view-organisations').classList.toggle('active', view==='organisations');
   document.getElementById('view-pipeline').classList.toggle('active', view==='pipeline');
   document.getElementById('view-quotes').classList.toggle('active', view==='quotes');
   document.getElementById('view-onboarding').classList.toggle('active', view==='onboarding');
@@ -692,6 +734,7 @@ function switchView(view){
   document.getElementById('view-tasks').classList.toggle('active', view==='tasks');
   document.getElementById('view-team').classList.toggle('active', view==='team');
   if(view==='team') renderTeam();
+  if(view==='organisations') showOrganisationsList();
   if(view==='pipeline') renderPipeline();
   if(view==='quotes') showQuoteList();
   if(view==='onboarding') showOnboardingList();
@@ -795,6 +838,9 @@ async function saveContact(){
   closeModal('contactModalOverlay');
   await loadContacts();
   renderContacts();
+  if(document.getElementById('organisationDetailMode').style.display !== 'none' && currentOrgPageOrgId){
+    renderOrgContactsSection(currentOrgPageOrgId);
+  }
   showToast('Contact saved.');
 }
 
@@ -1001,6 +1047,7 @@ const ONBOARDING_FIELD_LABELS = {
   financePhone:'Finance detail — Telephone', financeEmail:'Finance detail — Email'
 };
 let currentOnboardingOrgId = null;
+let currentOrgPageOrgId = null;
 
 function computeMissingOnboardingFields(values){
   return REQUIRED_FOR_ONBOARDING_LIVE.filter(f=>!values[f]);
@@ -1016,6 +1063,106 @@ function showOnboardingList(){
   document.getElementById('onboardingListMode').style.display = 'block';
   document.getElementById('onboardingDetailMode').style.display = 'none';
   renderOnboardingList();
+}
+
+/* ---------- Organisations page (browse orgs, see contacts + tasks together) ---------- */
+function showOrganisationsList(){
+  document.getElementById('organisationsListMode').style.display = 'block';
+  document.getElementById('organisationDetailMode').style.display = 'none';
+  currentOrgPageOrgId = null;
+  renderOrganisationsList();
+}
+
+function renderOrganisationsList(){
+  const q = (document.getElementById('organisationsSearch').value || '').toLowerCase();
+  const container = document.getElementById('organisationsListContainer');
+  const filtered = organisations.filter(o=>!q || o.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+  if(filtered.length===0){
+    container.innerHTML = '<div class="empty-state">' + (organisations.length===0 ? 'No organisations yet. Add your first one.' : 'No organisations match that search.') + '</div>';
+    return;
+  }
+  let html = '<table class="qtable"><thead><tr><th>Organisation</th><th>Contacts</th><th>Open tasks</th><th>Status</th></tr></thead><tbody>';
+  filtered.forEach(row=>{
+    const contactCount = contacts.filter(c=>c.organisation_id===row.id).length;
+    const openTaskCount = tasks.filter(t=>t.organisation_id===row.id && t.status!=='done').length;
+    const isLive = row.onboarding_status === 'live';
+    html += '<tr onclick="openOrganisationDetail(\''+row.id+'\')" style="cursor:pointer;">';
+    html += '<td><b>'+escapeHtml(row.name)+'</b></td>';
+    html += '<td>'+contactCount+'</td>';
+    html += '<td>'+openTaskCount+'</td>';
+    html += '<td>'+(isLive ? '<span class="live-badge">LIVE</span>' : '<span class="onboard-badge">Onboarding</span>')+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function openOrganisationDetail(orgId){
+  currentOrgPageOrgId = orgId;
+  const row = organisations.find(o=>o.id===orgId);
+  if(!row) return;
+  document.getElementById('orgDetailTitle').textContent = row.name;
+  document.getElementById('orgDetailLiveBadge').style.display = row.onboarding_status==='live' ? 'inline-block' : 'none';
+  document.getElementById('orgDetailSub').textContent = row.onboarding_status==='live' ? 'Live customer' : 'Currently onboarding';
+
+  const summaryParts = [];
+  const address = [row.address_line1, row.address_line2, row.city, row.county, row.postcode].filter(Boolean).join(', ');
+  if(address) summaryParts.push('<div><b>Address:</b> '+escapeHtml(address)+'</div>');
+  if(row.phone) summaryParts.push('<div><b>Phone:</b> '+escapeHtml(row.phone)+'</div>');
+  if(row.website) summaryParts.push('<div><b>Website:</b> '+escapeHtml(row.website)+'</div>');
+  if(row.notes) summaryParts.push('<div><b>Notes:</b> '+escapeHtml(row.notes)+'</div>');
+  document.getElementById('orgDetailSummary').innerHTML = summaryParts.length
+    ? summaryParts.join('<div style="margin-top:6px;"></div>')
+    : '<p style="color:var(--slate);font-size:13px;">No details added yet. Click "Edit details" to fill these in.</p>';
+
+  renderOrgContactsSection(orgId);
+  renderTasksForOrgInto(orgId, 'orgDetailTasks');
+
+  document.getElementById('organisationsListMode').style.display = 'none';
+  document.getElementById('organisationDetailMode').style.display = 'block';
+}
+
+function renderOrgContactsSection(orgId){
+  const container = document.getElementById('orgDetailContacts');
+  const orgContacts = contacts.filter(c=>c.organisation_id===orgId).sort((a,b)=>a.name.localeCompare(b.name));
+  if(orgContacts.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No contacts at this organisation yet.</p>';
+    return;
+  }
+  let html = '';
+  orgContacts.forEach(c=>{
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openContactModal(\''+c.id+'\')">';
+    html += '<div><span style="font-weight:600;">'+escapeHtml(c.name)+'</span>';
+    html += '<div style="font-size:11.5px;color:var(--slate);margin-top:2px;">'+escapeHtml([c.title, c.email, c.phone].filter(Boolean).join(' · ')||'—')+'</div></div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function editOrgFromOrgPage(){
+  if(!currentOrgPageOrgId) return;
+  switchView('onboarding');
+  openOnboardingDetail(currentOrgPageOrgId);
+}
+
+function createNewOrganisationFromOrgPage(){
+  switchView('onboarding');
+  openOnboardingDetail(null);
+}
+
+function addContactForCurrentOrg(){
+  if(!currentOrgPageOrgId) return;
+  openContactModal();
+  const org = organisations.find(o=>o.id===currentOrgPageOrgId);
+  if(org){
+    document.getElementById('cOrganisationId').value = org.id;
+    document.getElementById('cOrgSearch').value = org.name;
+  }
+}
+
+function addTaskForCurrentOrg(){
+  if(!currentOrgPageOrgId) return;
+  openTaskModal(null, { organisationId: currentOrgPageOrgId });
 }
 
 function renderOnboardingList(){
@@ -1627,12 +1774,16 @@ function refreshOrgTasksSectionIfVisible(){
   if(detailVisible && currentOnboardingOrgId){
     renderOrgTasksInOnboarding(currentOnboardingOrgId);
   }
+  const orgPageDetailVisible = document.getElementById('organisationDetailMode').style.display !== 'none';
+  if(orgPageDetailVisible && currentOrgPageOrgId){
+    renderTasksForOrgInto(currentOrgPageOrgId, 'orgDetailTasks');
+  }
 }
 
-function renderOrgTasksInOnboarding(orgId){
-  const container = document.getElementById('onboardingOrgTasksList');
+function renderTasksForOrgInto(orgId, containerId){
+  const container = document.getElementById(containerId);
   if(!orgId){
-    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this customer first, then tasks can be added here.</p>';
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this organisation first, then tasks can be added here.</p>';
     return;
   }
   const orgTasks = tasks.filter(t=>t.organisation_id===orgId).sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
@@ -1650,6 +1801,10 @@ function renderOrgTasksInOnboarding(orgId){
     html += '</div>';
   });
   container.innerHTML = html;
+}
+
+function renderOrgTasksInOnboarding(orgId){
+  renderTasksForOrgInto(orgId, 'onboardingOrgTasksList');
 }
 
 function populateTaskAssigneeDropdown(selectedId){
