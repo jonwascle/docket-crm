@@ -129,6 +129,8 @@
   .icon-btn:hover{background:var(--paper-card-alt);border-color:var(--brass);color:var(--ink);}
   .icon-btn.danger{color:var(--stamp-red);}
   .icon-btn.danger:hover{background:var(--stamp-red-bg);border-color:var(--stamp-red);}
+  .price-input{width:100px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:13px;text-align:right;background:var(--paper-card-alt);}
+  .price-input:focus{border-color:var(--brass);outline:none;}
   .subtab.active{border-bottom-color:var(--brass) !important;color:var(--ink);}
   .subtab{color:var(--slate);}
   .panel-box{background:var(--paper-card);border:1px solid var(--border);border-radius:8px;padding:16px;}
@@ -429,10 +431,24 @@
             <p class="view-title">Service Providers</p>
             <p class="view-sub">Everyone who collects waste on our behalf — their details, documents, and coverage.</p>
           </div>
-          <button class="btn small" onclick="openServiceProviderDetail(null)">+ New service provider</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn ghost small" onclick="openSPDefaultPricing()">Manage default pricing</button>
+            <button class="btn small" onclick="openServiceProviderDetail(null)">+ New service provider</button>
+          </div>
         </div>
         <input class="search-input" id="spSearch" placeholder="Search by company name" oninput="renderServiceProvidersList()">
         <div id="spListContainer"></div>
+      </div>
+
+      <div id="spDefaultPricingMode" style="display:none;">
+        <div class="view-header">
+          <div>
+            <p class="view-title">Default pricing</p>
+            <p class="view-sub">The starting price list every new service provider is based on. Changing a rate here only affects future providers, or ones you choose to reset.</p>
+          </div>
+          <button class="btn ghost small" onclick="showServiceProvidersList()">← Back</button>
+        </div>
+        <div id="spDefaultPricingListContainer" style="max-height:calc(100vh - 260px);overflow-y:auto;"></div>
       </div>
 
       <div id="spDetailMode" style="display:none;">
@@ -529,15 +545,16 @@
         </div>
 
         <div id="spSubtab-pricing" style="display:none;">
-          <p style="font-size:13px;color:var(--slate);margin-top:0;">These are the rates we pay this service provider — defaults to 40% below our standard customer pricing, adjustable below.</p>
+          <p style="font-size:13px;color:var(--slate);margin-top:0;">These are the rates we pay this service provider. Started from the default price list — edit any line below to change it just for them.</p>
           <div class="field-row" style="align-items:flex-end;">
-            <div class="field" style="max-width:220px;"><label>Adjustment vs. our standard pricing (%)</label>
-              <input id="spPricingAdjustment" type="number" step="0.1" oninput="renderSPPricingList()">
+            <div class="field" style="max-width:220px;"><label>Adjust all lines by (%)</label>
+              <input id="spPricingBulkAdjust" type="number" step="0.1" placeholder="e.g. -5 or 10">
             </div>
-            <button class="btn small" onclick="saveSPPricingAdjustment()" style="margin-bottom:14px;">Save adjustment</button>
-            <button class="btn ghost small" onclick="downloadSPPricingPdf()" style="margin-bottom:14px;">Download pricing PDF</button>
+            <button class="btn ghost small" onclick="applySPPricingBulkAdjust()" style="margin-bottom:14px;">Apply to all</button>
+            <button class="btn ghost small" onclick="resetSPPricingToDefault()" style="margin-bottom:14px;">Reset to default pricing</button>
+            <button class="btn small" onclick="downloadSPPricingPdf()" style="margin-bottom:14px;">Download pricing PDF</button>
           </div>
-          <div id="spPricingListContainer" style="max-height:520px;overflow-y:auto;"></div>
+          <div id="spPricingListContainer" style="max-height:calc(100vh - 340px);overflow-y:auto;"></div>
         </div>
       </div>
     </div>
@@ -886,6 +903,8 @@ let currentSPPostcodeAreas = [];
 let spDocuments = [];
 let spTeamMembers = [];
 let spWasteStations = [];
+let spDefaultPricing = [];
+let spProviderPricing = [];
 let assetsMapView = false;
 let leafletMapInstance = null;
 let leafletMarkersLayer = null;
@@ -2151,6 +2170,7 @@ async function loadServiceProviders(){
 
 function showServiceProvidersList(){
   document.getElementById('spListMode').style.display = 'block';
+  document.getElementById('spDefaultPricingMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'none';
   currentSPId = null;
   renderServiceProvidersList();
@@ -2215,7 +2235,6 @@ async function openServiceProviderDetail(id){
   document.getElementById('spBankAccountName').value = row ? (row.bank_account_name||'') : '';
   document.getElementById('spBankAccountNumber').value = row ? (row.bank_account_number||'') : '';
   document.getElementById('spBankSortCode').value = row ? (row.bank_sort_code||'') : '';
-  document.getElementById('spPricingAdjustment').value = row && row.pricing_adjustment_pct !== null && row.pricing_adjustment_pct !== undefined ? row.pricing_adjustment_pct : -40;
   document.getElementById('spNotes').value = row ? (row.notes||'') : '';
   onSPVatToggleChange();
   onSPBusinessTypeChange();
@@ -2236,11 +2255,11 @@ async function openServiceProviderDetail(id){
     await loadSPDocuments(id);
     await loadSPTeamMembers(id);
     await loadSPWasteStations(id);
+    await loadSPPricing(id);
   }else{
-    spDocuments = []; spTeamMembers = []; spWasteStations = [];
-    renderSPDocuments(); renderSPTeamMembers(); renderSPWasteStations();
+    spDocuments = []; spTeamMembers = []; spWasteStations = []; spProviderPricing = [];
+    renderSPDocuments(); renderSPTeamMembers(); renderSPWasteStations(); renderSPPricingList();
   }
-  renderSPPricingList();
 }
 
 function renderSPPostcodeAreas(){
@@ -2615,45 +2634,144 @@ async function deleteSPWasteStation(){
   showToast('Waste transfer station deleted.');
 }
 
-/* ---- Pricing ---- */
-function renderSPPricingList(){
-  const container = document.getElementById('spPricingListContainer');
-  if(!currentSPId){
-    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then their pricing sheet can be set up here.</p>';
+/* ---- Default pricing (shared starting point for every provider) ---- */
+async function loadSPDefaultPricing(){
+  const { data, error } = await sb.from('sp_default_pricing').select('*').order('category').order('service_name');
+  if(error){ showToast('Could not load default pricing: ' + error.message, true); return; }
+  spDefaultPricing = data || [];
+}
+
+async function openSPDefaultPricing(){
+  await loadSPDefaultPricing();
+  document.getElementById('spListMode').style.display = 'none';
+  document.getElementById('spDetailMode').style.display = 'none';
+  document.getElementById('spDefaultPricingMode').style.display = 'block';
+  renderSPDefaultPricingList();
+}
+
+function renderSPDefaultPricingList(){
+  const container = document.getElementById('spDefaultPricingListContainer');
+  if(spDefaultPricing.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No default pricing found — run the latest database update to seed this list.</p>';
     return;
   }
-  const pct = Number(document.getElementById('spPricingAdjustment').value) || 0;
   const groups = {};
-  SERVICES.forEach(s=>{ groups[s.category] = groups[s.category] || []; groups[s.category].push(s); });
-
-  let html = '<table class="qtable"><thead><tr><th>Service</th><th>Our standard price</th><th>This provider\'s rate</th></tr></thead><tbody>';
-  Object.keys(groups).forEach(cat=>{
-    html += '<tr><td colspan="3" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
-    groups[cat].forEach(s=>{
-      const rate = round2(s.price * (1 + pct/100));
-      html += '<tr><td>'+escapeHtml(s.name)+'</td><td style="color:var(--slate);">'+fmtMoney(s.price)+'</td><td><b>'+fmtMoney(rate)+'</b></td></tr>';
+  const order = [];
+  spDefaultPricing.forEach(row=>{
+    const cat = row.category || 'Other';
+    if(!groups[cat]){ groups[cat] = []; order.push(cat); }
+    groups[cat].push(row);
+  });
+  let html = '<table class="qtable"><thead><tr><th>Service</th><th>Default rate</th></tr></thead><tbody>';
+  order.forEach(cat=>{
+    html += '<tr><td colspan="2" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
+    groups[cat].forEach(row=>{
+      html += '<tr><td>'+escapeHtml(row.service_name)+'</td><td><input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPDefaultPricingRate(\''+row.id+'\', this.value)"></td></tr>';
     });
   });
   html += '</tbody></table>';
   container.innerHTML = html;
 }
 
-async function saveSPPricingAdjustment(){
-  if(!currentSPId) return;
-  const pct = Number(document.getElementById('spPricingAdjustment').value) || 0;
-  const { error } = await sb.from('service_providers').update({ pricing_adjustment_pct: pct }).eq('id', currentSPId);
+async function updateSPDefaultPricingRate(id, value){
+  const rate = Number(value) || 0;
+  const { error } = await sb.from('sp_default_pricing').update({ rate }).eq('id', id);
   if(error){ showToast('Could not save: ' + error.message, true); return; }
-  await loadServiceProviders();
-  showToast('Pricing adjustment saved.');
+  const row = spDefaultPricing.find(r=>r.id===id);
+  if(row) row.rate = rate;
+  showToast('Default rate updated.');
+}
+
+/* ---- Per-provider pricing (starts from the default list, then editable per line) ---- */
+async function loadSPPricing(spId){
+  const { data, error } = await sb.from('service_provider_pricing').select('*').eq('service_provider_id', spId).order('category').order('service_name');
+  if(error){ showToast('Could not load pricing: ' + error.message, true); return; }
+  spProviderPricing = data || [];
+
+  if(spProviderPricing.length===0){
+    // First time viewing this provider's pricing — seed it from the default list
+    // (falling back to 40% below standard quote pricing if no defaults exist yet).
+    if(spDefaultPricing.length===0){
+      await loadSPDefaultPricing();
+    }
+    const source = spDefaultPricing.length>0
+      ? spDefaultPricing.map(r=>({ service_name: r.service_name, category: r.category, rate: r.rate }))
+      : SERVICES.map(s=>({ service_name: s.name, category: s.category, rate: round2(s.price * 0.6) }));
+    if(source.length>0){
+      const rows = source.map(r=>({ ...r, service_provider_id: spId }));
+      const { data: inserted, error: insertErr } = await sb.from('service_provider_pricing').insert(rows).select();
+      if(insertErr){ showToast('Could not set up pricing: ' + insertErr.message, true); return; }
+      spProviderPricing = inserted || [];
+    }
+  }
+  renderSPPricingList();
+}
+
+function renderSPPricingList(){
+  const container = document.getElementById('spPricingListContainer');
+  if(!currentSPId){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then their pricing sheet can be set up here.</p>';
+    return;
+  }
+  if(spProviderPricing.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No pricing set up yet.</p>';
+    return;
+  }
+  const groups = {};
+  const order = [];
+  spProviderPricing.forEach(row=>{
+    const cat = row.category || 'Other';
+    if(!groups[cat]){ groups[cat] = []; order.push(cat); }
+    groups[cat].push(row);
+  });
+  let html = '<table class="qtable"><thead><tr><th>Service</th><th>This provider\'s rate</th></tr></thead><tbody>';
+  order.forEach(cat=>{
+    html += '<tr><td colspan="2" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
+    groups[cat].forEach(row=>{
+      html += '<tr><td>'+escapeHtml(row.service_name)+'</td><td><input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPProviderPricingRate(\''+row.id+'\', this.value)"></td></tr>';
+    });
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function updateSPProviderPricingRate(id, value){
+  const rate = Number(value) || 0;
+  const { error } = await sb.from('service_provider_pricing').update({ rate }).eq('id', id);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  const row = spProviderPricing.find(r=>r.id===id);
+  if(row) row.rate = rate;
+  showToast('Rate updated.');
+}
+
+async function applySPPricingBulkAdjust(){
+  if(!currentSPId || spProviderPricing.length===0) return;
+  const pct = Number(document.getElementById('spPricingBulkAdjust').value);
+  if(!pct){ showToast('Enter a percentage to apply first.', true); return; }
+  for(const row of spProviderPricing){
+    row.rate = round2(row.rate * (1 + pct/100));
+    await sb.from('service_provider_pricing').update({ rate: row.rate }).eq('id', row.id);
+  }
+  document.getElementById('spPricingBulkAdjust').value = '';
+  renderSPPricingList();
+  showToast('Applied ' + pct + '% to every line.');
+}
+
+async function resetSPPricingToDefault(){
+  if(!currentSPId) return;
+  if(!confirm('Reset this provider\'s pricing to the current default list? Any custom changes for them will be lost.')) return;
+  await sb.from('service_provider_pricing').delete().eq('service_provider_id', currentSPId);
+  spProviderPricing = [];
+  await loadSPPricing(currentSPId);
+  showToast('Pricing reset to default.');
 }
 
 function downloadSPPricingPdf(){
   if(!currentSPId) return;
   const sp = serviceProviders.find(s=>s.id===currentSPId);
-  if(!sp) return;
-  const pct = Number(document.getElementById('spPricingAdjustment').value) || 0;
-  const items = SERVICES.map(s=>({ name: s.name, category: s.category, basePrice: s.price }));
-  const pseudoQuote = { id: sp.id, contactId: null, createdAt: Date.now(), adjustmentPct: pct, items };
+  if(!sp || spProviderPricing.length===0) return;
+  const items = spProviderPricing.map(r=>({ name: r.service_name, category: r.category, basePrice: r.rate }));
+  const pseudoQuote = { id: sp.id, contactId: null, createdAt: Date.now(), adjustmentPct: 0, items };
   const pseudoContact = { name: sp.name, email: sp.email, organisation_id: null };
   const pdfString = buildQuotePdfString(pseudoQuote, pseudoContact, {
     headerLabel: 'SUPPLIER PRICING',
