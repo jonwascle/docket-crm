@@ -156,6 +156,7 @@
     <div class="nav-item" data-view="quotes" onclick="switchView('quotes')">Quotes</div>
     <div class="nav-item" data-view="onboarding" onclick="switchView('onboarding')">Onboarding</div>
     <div class="nav-item" data-view="assets" onclick="switchView('assets')">Assets</div>
+    <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">Tasks</div>
     <div class="nav-item" data-view="team" onclick="switchView('team')" id="teamNavItem" style="display:none;">Team</div>
     <div class="sidebar-footer">
       <div class="who" id="sidebarWho"></div>
@@ -317,7 +318,13 @@
             </select>
           </div>
           <div id="wasteBagSubfields" style="display:none;">
-            <div class="field"><label>Waste bag delivery address</label><input id="obWasteBagAddress" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Waste bag delivery — address line 1</label><input id="obWasteBagAddr1" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Waste bag delivery — address line 2</label><input id="obWasteBagAddr2"></div>
+            <div class="field-row">
+              <div class="field"><label>Town</label><input id="obWasteBagTown" oninput="updateOnboardingProgress()"></div>
+              <div class="field"><label>County</label><input id="obWasteBagCounty" oninput="updateOnboardingProgress()"></div>
+            </div>
+            <div class="field"><label>Postcode</label><input id="obWasteBagPostcode" oninput="updateOnboardingProgress()"></div>
             <div class="field"><label>Amount of waste bags to be delivered</label><input id="obWasteBagAmount" type="number" min="0" oninput="updateOnboardingProgress()"></div>
           </div>
           <div class="field"><label>Smart skip</label>
@@ -367,6 +374,22 @@
       </div>
       <input class="search-input" id="assetSearch" placeholder="Search by asset number, customer, address, or postcode" oninput="renderAssets()">
       <div id="assetsListContainer"></div>
+    </div>
+
+    <!-- ---------- TASKS VIEW ---------- -->
+    <div id="view-tasks" class="view">
+      <div class="view-header">
+        <div>
+          <p class="view-title">Tasks</p>
+          <p class="view-sub">Reminders assigned to your team — some are created automatically.</p>
+        </div>
+        <button class="btn small" onclick="openTaskModal()">+ New task</button>
+      </div>
+      <div class="subtabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);">
+        <span class="subtab active" data-taskview="open" onclick="switchTaskSubview('open')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Open</span>
+        <span class="subtab" data-taskview="done" onclick="switchTaskSubview('done')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Completed</span>
+      </div>
+      <div id="tasksListContainer"></div>
     </div>
 
     <!-- ---------- TEAM VIEW (admin only) ---------- -->
@@ -570,6 +593,30 @@
   </div>
 </div>
 
+<!-- ---------- Task modal ---------- -->
+<div class="modal-overlay" id="taskModalOverlay">
+  <div class="modal">
+    <p class="modal-title"><span id="taskModalTitle">New task</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('taskModalOverlay')">✕</span></p>
+    <input type="hidden" id="taskId">
+    <input type="hidden" id="taskOrganisationId">
+    <input type="hidden" id="taskChainKey">
+    <input type="hidden" id="taskChainStep">
+    <div class="field"><label>Title</label><input id="taskTitleField"></div>
+    <div class="field" id="taskOrgContextField" style="display:none;"><label>Related organisation</label><div id="taskOrgContextName" style="font-size:13.5px;color:var(--ink-soft);padding:8px 0;"></div></div>
+    <div class="field"><label>Assign to</label>
+      <select id="taskAssignedTo"><option value="">— Unassigned —</option></select>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="taskNotes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn danger small" id="taskDeleteBtn" style="display:none;" onclick="deleteTask()">Delete</button>
+      <div class="right">
+        <button class="btn ghost small" onclick="closeModal('taskModalOverlay')">Cancel</button>
+        <button class="btn small" onclick="saveTask()">Save task</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    SUPABASE CONFIG — fill these in after creating your project
@@ -588,6 +635,9 @@ let deals = [];
 let assets = [];
 let quotes = [];
 let currentQuote = null;
+let tasks = [];
+let teamMembers = [];
+let currentTaskSubview = 'open';
 let currentAssetSubview = 'skip';
 const DEAL_STAGES = [
   {key:'lead', label:'Lead'},
@@ -651,6 +701,8 @@ async function afterLogin(user){
   await loadDeals();
   await loadAssets();
   await loadQuotes();
+  await loadTeamMembers();
+  await loadTasks();
   renderContacts();
 }
 
@@ -671,12 +723,14 @@ function switchView(view){
   document.getElementById('view-quotes').classList.toggle('active', view==='quotes');
   document.getElementById('view-onboarding').classList.toggle('active', view==='onboarding');
   document.getElementById('view-assets').classList.toggle('active', view==='assets');
+  document.getElementById('view-tasks').classList.toggle('active', view==='tasks');
   document.getElementById('view-team').classList.toggle('active', view==='team');
   if(view==='team') renderTeam();
   if(view==='pipeline') renderPipeline();
   if(view==='quotes') showQuoteList();
   if(view==='onboarding') showOnboardingList();
   if(view==='assets') renderAssets();
+  if(view==='tasks') renderTasks();
 }
 
 function closeModal(id){ document.getElementById(id).classList.remove('active'); }
@@ -942,7 +996,8 @@ function orgRowToCamel(row){
     contactPhone: row.contact_phone, contactEmail: row.contact_email, contactSendWTN: row.contact_send_wtn, contactWTNEmail: row.contact_wtn_email,
     financeFirstName: row.finance_first_name, financeLastName: row.finance_last_name, financeJobTitle: row.finance_job_title,
     financePhone: row.finance_phone, financeEmail: row.finance_email, financeSendWTN: row.finance_send_wtn, financeInvoiceEmail: row.finance_invoice_email,
-    wasteBagsRequired: row.waste_bags_required, wasteBagDeliveryAddress: row.waste_bag_delivery_address, wasteBagAmount: row.waste_bag_amount,
+    wasteBagsRequired: row.waste_bags_required, wasteBagAddressLine1: row.waste_bag_address_line1, wasteBagAddressLine2: row.waste_bag_address_line2,
+    wasteBagTown: row.waste_bag_town, wasteBagCounty: row.waste_bag_county, wasteBagPostcode: row.waste_bag_postcode, wasteBagAmount: row.waste_bag_amount,
     smartSkipRequired: row.smart_skip_required, smartSkipAddress: row.smart_skip_address, smartSkipAssetNumber: row.smart_skip_asset_number,
     smartSkipDeliveryDate: row.smart_skip_delivery_date, smartSkipGoLiveDate: row.smart_skip_go_live_date,
     propertyClearanceRequired: row.property_clearance_required, onboardingStatus: row.onboarding_status
@@ -956,7 +1011,8 @@ function camelToOrgRow(o){
     contact_phone: o.contactPhone||null, contact_email: o.contactEmail||null, contact_send_wtn: !!o.contactSendWTN, contact_wtn_email: o.contactWTNEmail||null,
     finance_first_name: o.financeFirstName||null, finance_last_name: o.financeLastName||null, finance_job_title: o.financeJobTitle||null,
     finance_phone: o.financePhone||null, finance_email: o.financeEmail||null, finance_send_wtn: !!o.financeSendWTN, finance_invoice_email: o.financeInvoiceEmail||null,
-    waste_bags_required: o.wasteBagsRequired||null, waste_bag_delivery_address: o.wasteBagDeliveryAddress||null, waste_bag_amount: o.wasteBagAmount||null,
+    waste_bags_required: o.wasteBagsRequired||null, waste_bag_address_line1: o.wasteBagAddressLine1||null, waste_bag_address_line2: o.wasteBagAddressLine2||null,
+    waste_bag_town: o.wasteBagTown||null, waste_bag_county: o.wasteBagCounty||null, waste_bag_postcode: o.wasteBagPostcode||null, waste_bag_amount: o.wasteBagAmount||null,
     smart_skip_required: o.smartSkipRequired||null, smart_skip_address: o.smartSkipAddress||null, smart_skip_asset_number: o.smartSkipAssetNumber||null,
     smart_skip_delivery_date: o.smartSkipDeliveryDate||null, smart_skip_go_live_date: o.smartSkipGoLiveDate||null,
     property_clearance_required: o.propertyClearanceRequired||null, onboarding_status: o.onboardingStatus||'onboarding'
@@ -979,7 +1035,7 @@ const ONBOARDING_FIELD_INPUT_IDS = {
   name:'obCustomerName', addressLine1:'obAddr1', city:'obCity', county:'obCounty', postcode:'obPostcode', website:'obWebsite',
   contactFirstName:'obContactFirst', contactLastName:'obContactLast', contactJobTitle:'obContactJob', contactPhone:'obContactPhone', contactEmail:'obContactEmail',
   financeFirstName:'obFinanceFirst', financeLastName:'obFinanceLast', financeJobTitle:'obFinanceJob', financePhone:'obFinancePhone', financeEmail:'obFinanceEmail',
-  wasteBagsRequired:'obWasteBags', wasteBagDeliveryAddress:'obWasteBagAddress', wasteBagAmount:'obWasteBagAmount',
+  wasteBagsRequired:'obWasteBags', wasteBagAddressLine1:'obWasteBagAddr1', wasteBagTown:'obWasteBagTown', wasteBagCounty:'obWasteBagCounty', wasteBagPostcode:'obWasteBagPostcode', wasteBagAmount:'obWasteBagAmount',
   smartSkipRequired:'obSmartSkip', smartSkipAddress:'obSmartSkipAddress', smartSkipAssetNumber:'obSmartSkipAsset',
   smartSkipDeliveryDate:'obSmartSkipDeliveryDate', smartSkipGoLiveDate:'obSmartSkipGoLiveDate',
   propertyClearanceRequired:'obPropertyClearance'
@@ -991,7 +1047,7 @@ const ONBOARDING_FIELD_LABELS = {
   contactPhone:'Contact detail — Telephone', contactEmail:'Contact detail — Email',
   financeFirstName:'Finance detail — First name', financeLastName:'Finance detail — Last name', financeJobTitle:'Finance detail — Job position',
   financePhone:'Finance detail — Telephone', financeEmail:'Finance detail — Email',
-  wasteBagsRequired:'Services required — Waste bags (Yes/No)', wasteBagDeliveryAddress:'Services required — Waste bag delivery address',
+  wasteBagsRequired:'Services required — Waste bags (Yes/No)', wasteBagAddressLine1:'Services required — Waste bag delivery address', wasteBagTown:'Services required — Waste bag delivery town', wasteBagPostcode:'Services required — Waste bag delivery postcode',
   wasteBagAmount:'Services required — Amount of waste bags to be delivered', smartSkipRequired:'Services required — Smart skip (Yes/No)',
   smartSkipAddress:'Services required — Address for smart skip delivery', smartSkipAssetNumber:'Services required — Asset number for smart skip',
   smartSkipDeliveryDate:'Services required — Delivery date of smart skip', smartSkipGoLiveDate:'Services required — Go live date of smart skip',
@@ -1002,7 +1058,9 @@ let currentOnboardingOrgId = null;
 function computeMissingOnboardingFields(values){
   const missing = REQUIRED_FOR_ONBOARDING_LIVE.filter(f=>!values[f]);
   if(values.wasteBagsRequired === 'yes'){
-    if(!values.wasteBagDeliveryAddress) missing.push('wasteBagDeliveryAddress');
+    if(!values.wasteBagAddressLine1) missing.push('wasteBagAddressLine1');
+    if(!values.wasteBagTown) missing.push('wasteBagTown');
+    if(!values.wasteBagPostcode) missing.push('wasteBagPostcode');
     if(!values.wasteBagAmount) missing.push('wasteBagAmount');
   }
   if(values.smartSkipRequired === 'yes'){
@@ -1087,7 +1145,11 @@ function openOnboardingDetail(orgId){
   document.getElementById('obFinanceInvoiceEmail').value = org.financeInvoiceEmail || '';
 
   document.getElementById('obWasteBags').value = org.wasteBagsRequired || '';
-  document.getElementById('obWasteBagAddress').value = org.wasteBagDeliveryAddress || '';
+  document.getElementById('obWasteBagAddr1').value = org.wasteBagAddressLine1 || '';
+  document.getElementById('obWasteBagAddr2').value = org.wasteBagAddressLine2 || '';
+  document.getElementById('obWasteBagTown').value = org.wasteBagTown || '';
+  document.getElementById('obWasteBagCounty').value = org.wasteBagCounty || '';
+  document.getElementById('obWasteBagPostcode').value = org.wasteBagPostcode || '';
   document.getElementById('obWasteBagAmount').value = org.wasteBagAmount || '';
   document.getElementById('wasteBagSubfields').style.display = org.wasteBagsRequired==='yes' ? 'block' : 'none';
 
@@ -1136,7 +1198,11 @@ function collectOnboardingFormValues(){
     financeSendWTN: document.getElementById('obFinanceWTN').checked,
     financeInvoiceEmail: document.getElementById('obFinanceInvoiceEmail').value.trim(),
     wasteBagsRequired: document.getElementById('obWasteBags').value,
-    wasteBagDeliveryAddress: document.getElementById('obWasteBagAddress').value.trim(),
+    wasteBagAddressLine1: document.getElementById('obWasteBagAddr1').value.trim(),
+    wasteBagAddressLine2: document.getElementById('obWasteBagAddr2').value.trim(),
+    wasteBagTown: document.getElementById('obWasteBagTown').value.trim(),
+    wasteBagCounty: document.getElementById('obWasteBagCounty').value.trim(),
+    wasteBagPostcode: document.getElementById('obWasteBagPostcode').value.trim(),
     wasteBagAmount: document.getElementById('obWasteBagAmount').value.trim(),
     smartSkipRequired: document.getElementById('obSmartSkip').value,
     smartSkipAddress: document.getElementById('obSmartSkipAddress').value.trim(),
@@ -1165,24 +1231,27 @@ async function saveOnboarding(){
   const values = collectOnboardingFormValues();
   if(!values.name){ showToast('Customer name is required.', true); return; }
   let onboardingStatus = 'onboarding';
-  if(currentOnboardingOrgId){
-    const existing = organisations.find(o=>o.id===currentOnboardingOrgId);
-    if(existing && existing.onboarding_status==='live'){
-      const stillQualifies = computeMissingOnboardingFields(values).length === 0;
-      onboardingStatus = stillQualifies ? 'live' : 'onboarding';
-    }
+  const existing = currentOnboardingOrgId ? organisations.find(o=>o.id===currentOnboardingOrgId) : null;
+  const previousWasteBagsRequired = existing ? existing.waste_bags_required : null;
+  if(existing && existing.onboarding_status==='live'){
+    const stillQualifies = computeMissingOnboardingFields(values).length === 0;
+    onboardingStatus = stillQualifies ? 'live' : 'onboarding';
   }
   const row = camelToOrgRow({...values, onboardingStatus});
-  let error;
+  let error, orgId = currentOnboardingOrgId;
   if(currentOnboardingOrgId){
     ({ error } = await sb.from('organisations').update(row).eq('id', currentOnboardingOrgId));
   }else{
-    ({ error } = await sb.from('organisations').insert(row));
+    const res = await sb.from('organisations').insert(row).select().single();
+    error = res.error;
+    if(res.data) orgId = res.data.id;
   }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
+  currentOnboardingOrgId = orgId;
   await loadOrganisations();
   showToast('Onboarding progress saved.');
   showOnboardingList();
+  maybeStartWasteBagsChain(values, previousWasteBagsRequired, orgId);
 }
 
 async function toggleOnboardingLive(){
@@ -1608,6 +1677,182 @@ async function deleteAsset(){
   renderAssets();
   showToast('Asset deleted.');
 }
+
+/* ---------- Tasks ---------- */
+const TASK_CHAINS = {
+  waste_bags: [
+    { step: 1, key: 'po', title: (amount)=> 'Request PO for waste bags' + (amount ? ' ('+amount+' bags)' : '') },
+    { step: 2, key: 'delivery', title: ()=> 'Arrange delivery of waste bags' },
+    { step: 3, key: 'invoice', title: ()=> 'Raise invoice for waste bags' }
+  ]
+};
+
+async function loadTeamMembers(){
+  const { data, error } = await sb.from('profiles').select('id, name, email').order('name');
+  if(error){ return; }
+  teamMembers = data || [];
+}
+
+async function loadTasks(){
+  const { data, error } = await sb.from('tasks').select('*').order('created_at', {ascending:false});
+  if(error){ showToast('Could not load tasks: ' + error.message, true); return; }
+  tasks = data || [];
+}
+
+function teamMemberName(id){
+  const m = teamMembers.find(x=>x.id===id);
+  return m ? (m.name || m.email) : '';
+}
+
+function switchTaskSubview(view){
+  currentTaskSubview = view;
+  document.querySelectorAll('#view-tasks .subtab').forEach(el=>el.classList.toggle('active', el.dataset.taskview===view));
+  renderTasks();
+}
+
+function renderTasks(){
+  const container = document.getElementById('tasksListContainer');
+  const filtered = tasks.filter(t=> currentTaskSubview==='open' ? t.status==='todo' : t.status==='done')
+    .sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+  if(filtered.length===0){
+    container.innerHTML = '<div class="empty-state">' + (currentTaskSubview==='open' ? 'No open tasks.' : 'No completed tasks yet.') + '</div>';
+    return;
+  }
+  let html = '<table class="qtable"><thead><tr><th></th><th>Task</th><th>Organisation</th><th>Assigned to</th><th>Created</th></tr></thead><tbody>';
+  filtered.forEach(t=>{
+    const org = t.organisation_id ? organisations.find(o=>o.id===t.organisation_id) : null;
+    html += '<tr>';
+    html += '<td onclick="event.stopPropagation();" style="width:32px;"><input type="checkbox" '+(t.status==='done'?'checked':'')+' onchange="toggleTaskDone(\''+t.id+'\', this.checked)"></td>';
+    html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;"><b>'+escapeHtml(t.title)+'</b>'+(t.notes?'<div style="color:var(--slate);font-size:12px;margin-top:2px;">'+escapeHtml(t.notes)+'</div>':'')+'</td>';
+    html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;">'+(org?escapeHtml(org.name):'—')+'</td>';
+    html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;">'+(t.assigned_to?escapeHtml(teamMemberName(t.assigned_to)||'—'):'—')+'</td>';
+    html += '<td onclick="openTaskModal(\''+t.id+'\')" style="cursor:pointer;">'+new Date(t.created_at).toLocaleDateString('en-GB')+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function populateTaskAssigneeDropdown(selectedId){
+  const sel = document.getElementById('taskAssignedTo');
+  sel.innerHTML = '<option value="">— Unassigned —</option>' +
+    teamMembers.map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name || m.email)+'</option>').join('');
+  sel.value = selectedId || '';
+}
+
+function openTaskModal(id, prefill){
+  const t = id ? tasks.find(x=>x.id===id) : null;
+  document.getElementById('taskId').value = id || '';
+  document.getElementById('taskModalTitle').textContent = t ? 'Edit task' : (prefill ? prefill.modalTitle || 'New task' : 'New task');
+  document.getElementById('taskTitleField').value = t ? t.title : (prefill ? prefill.title : '');
+  document.getElementById('taskNotes').value = t ? (t.notes||'') : (prefill ? (prefill.notes||'') : '');
+
+  const orgId = t ? t.organisation_id : (prefill ? prefill.organisationId : null);
+  document.getElementById('taskOrganisationId').value = orgId || '';
+  const orgField = document.getElementById('taskOrgContextField');
+  if(orgId){
+    const org = organisations.find(o=>o.id===orgId);
+    document.getElementById('taskOrgContextName').textContent = org ? org.name : '';
+    orgField.style.display = 'block';
+  }else{
+    orgField.style.display = 'none';
+  }
+
+  document.getElementById('taskChainKey').value = t ? (t.chain_key||'') : (prefill ? (prefill.chainKey||'') : '');
+  document.getElementById('taskChainStep').value = t ? (t.chain_step||'') : (prefill ? (prefill.chainStep||'') : '');
+
+  populateTaskAssigneeDropdown(t ? t.assigned_to : (prefill ? prefill.assignedTo : ''));
+  document.getElementById('taskDeleteBtn').style.display = t ? 'inline-flex' : 'none';
+  document.getElementById('taskModalOverlay').classList.add('active');
+}
+
+async function saveTask(){
+  const id = document.getElementById('taskId').value;
+  const title = document.getElementById('taskTitleField').value.trim();
+  if(!title){ showToast('Task title is required.', true); return; }
+  const payload = {
+    title,
+    notes: document.getElementById('taskNotes').value.trim(),
+    organisation_id: document.getElementById('taskOrganisationId').value || null,
+    assigned_to: document.getElementById('taskAssignedTo').value || null,
+    chain_key: document.getElementById('taskChainKey').value || null,
+    chain_step: document.getElementById('taskChainStep').value ? Number(document.getElementById('taskChainStep').value) : null
+  };
+  let error;
+  if(id){
+    ({ error } = await sb.from('tasks').update(payload).eq('id', id));
+  }else{
+    payload.status = 'todo';
+    payload.created_by = currentUser.id;
+    ({ error } = await sb.from('tasks').insert(payload));
+  }
+  if(error){ showToast('Could not save task: ' + error.message, true); return; }
+  closeModal('taskModalOverlay');
+  await loadTasks();
+  renderTasks();
+  showToast('Task saved.');
+}
+
+async function deleteTask(){
+  const id = document.getElementById('taskId').value;
+  if(!id) return;
+  if(!confirm('Delete this task? This cannot be undone.')) return;
+  const { error } = await sb.from('tasks').delete().eq('id', id);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  closeModal('taskModalOverlay');
+  await loadTasks();
+  renderTasks();
+  showToast('Task deleted.');
+}
+
+async function toggleTaskDone(id, isDone){
+  const task = tasks.find(x=>x.id===id);
+  if(!task) return;
+  const { error } = await sb.from('tasks')
+    .update({ status: isDone ? 'done' : 'todo', completed_at: isDone ? new Date().toISOString() : null })
+    .eq('id', id);
+  if(error){ showToast('Could not update task: ' + error.message, true); return; }
+  await loadTasks();
+  renderTasks();
+
+  if(isDone && task.chain_key && TASK_CHAINS[task.chain_key]){
+    const chain = TASK_CHAINS[task.chain_key];
+    const next = chain.find(s=>s.step === (task.chain_step||0) + 1);
+    if(next){
+      showToast('Task complete — set up the next step in this chain.');
+      openTaskModal(null, {
+        modalTitle: 'Next step: ' + next.title(),
+        title: next.title(),
+        organisationId: task.organisation_id,
+        chainKey: task.chain_key,
+        chainStep: next.step,
+        assignedTo: task.assigned_to
+      });
+      return;
+    }
+    showToast('Task complete — that chain is now finished.');
+  }else if(isDone){
+    showToast('Task marked complete.');
+  }
+}
+
+/* Called after onboarding is saved, to start the waste-bags task chain
+   the first time a customer's waste bag requirement flips to "yes". */
+function maybeStartWasteBagsChain(org, previousWasteBagsRequired, orgId){
+  if(org.wasteBagsRequired === 'yes' && previousWasteBagsRequired !== 'yes'){
+    const chain = TASK_CHAINS.waste_bags;
+    const first = chain[0];
+    openTaskModal(null, {
+      modalTitle: 'New task: ' + first.title(org.wasteBagAmount),
+      title: first.title(org.wasteBagAmount),
+      organisationId: orgId,
+      chainKey: 'waste_bags',
+      chainStep: first.step,
+      notes: 'Delivery address: ' + [org.wasteBagAddressLine1, org.wasteBagAddressLine2, org.wasteBagTown, org.wasteBagCounty, org.wasteBagPostcode].filter(Boolean).join(', ')
+    });
+  }
+}
+
 /* ---------- Quotes ---------- */
 async function loadQuotes(){
   const { data, error } = await sb.from('quotes').select('*, quote_items(*)').order('created_at', {ascending:false});
