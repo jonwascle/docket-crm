@@ -403,6 +403,31 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="editTeamModalOverlay">
+  <div class="modal">
+    <p class="modal-title"><span>Edit team member</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('editTeamModalOverlay')">✕</span></p>
+    <input type="hidden" id="etmId">
+    <div class="login-error" id="editTeamModalError"></div>
+    <div class="field"><label>Name</label><input id="etmName"></div>
+    <div class="field"><label>Email</label><input id="etmEmail" type="email"></div>
+    <div class="field"><label>New password</label><input id="etmPassword" type="text" placeholder="Leave blank to keep their current password"></div>
+    <div class="field"><label>Role</label>
+      <select id="etmRole">
+        <option value="user">User</option>
+        <option value="manager">Manager</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger small" onclick="deleteTeamMember()">Delete login</button>
+      <div class="right">
+        <button class="btn ghost small" onclick="closeModal('editTeamModalOverlay')">Cancel</button>
+        <button class="btn small" id="saveTeamMemberBtn" onclick="saveTeamMemberEdit()">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="appToast"></div>
 
 <!-- ---------- Contact modal ---------- -->
@@ -1148,7 +1173,8 @@ async function renderTeam(){
   const { data, error } = await sb.from('profiles').select('*').order('email');
   if(error){ container.innerHTML = '<div class="empty-state">Could not load team: '+escapeHtml(error.message)+'</div>'; return; }
   if(!data || data.length===0){ container.innerHTML = '<div class="empty-state">No profiles yet.</div>'; return; }
-  let html = '<table class="qtable"><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>';
+  window._teamProfiles = data;
+  let html = '<table class="qtable"><thead><tr><th>Name</th><th>Email</th><th>Role</th>'+(currentProfile.role==='admin'?'<th></th>':'')+'</tr></thead><tbody>';
   data.forEach(p=>{
     html += '<tr><td>'+escapeHtml(p.name||'—')+'</td><td>'+escapeHtml(p.email)+'</td><td>';
     if(currentProfile.role === 'admin'){
@@ -1158,7 +1184,11 @@ async function renderTeam(){
     }else{
       html += '<span class="badge '+p.role+'">'+p.role+'</span>';
     }
-    html += '</td></tr>';
+    html += '</td>';
+    if(currentProfile.role === 'admin'){
+      html += '<td><button class="btn ghost small" onclick="openEditTeamMemberModal(\''+p.id+'\')">Edit</button></td>';
+    }
+    html += '</tr>';
   });
   html += '</tbody></table>';
   container.innerHTML = html;
@@ -1211,7 +1241,7 @@ async function createTeamMember(){
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + session.access_token
       },
-      body: JSON.stringify({ email, password, name, role })
+      body: JSON.stringify({ action: 'create', email, password, name, role })
     });
     const result = await res.json();
     if(!res.ok || result.error){
@@ -1228,6 +1258,102 @@ async function createTeamMember(){
   }finally{
     btn.disabled = false;
     btn.textContent = 'Create login';
+  }
+}
+
+function openEditTeamMemberModal(profileId){
+  const p = (window._teamProfiles||[]).find(x=>x.id===profileId);
+  if(!p) return;
+  document.getElementById('etmId').value = p.id;
+  document.getElementById('etmName').value = p.name || '';
+  document.getElementById('etmEmail').value = p.email || '';
+  document.getElementById('etmPassword').value = '';
+  document.getElementById('etmRole').value = p.role;
+  document.getElementById('editTeamModalError').style.display = 'none';
+  document.getElementById('editTeamModalOverlay').classList.add('active');
+}
+
+async function saveTeamMemberEdit(){
+  const id = document.getElementById('etmId').value;
+  const name = document.getElementById('etmName').value.trim();
+  const email = document.getElementById('etmEmail').value.trim();
+  const password = document.getElementById('etmPassword').value;
+  const role = document.getElementById('etmRole').value;
+  const errEl = document.getElementById('editTeamModalError');
+  errEl.style.display = 'none';
+
+  if(!email){ errEl.textContent = 'Email is required.'; errEl.style.display = 'block'; return; }
+  if(password && password.length < 6){ errEl.textContent = 'New password must be at least 6 characters.'; errEl.style.display = 'block'; return; }
+  if(id === currentUser.id && role !== 'admin'){
+    errEl.textContent = "You can't remove your own admin access.";
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('saveTeamMemberBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(SUPABASE_URL + '/functions/v1/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token
+      },
+      body: JSON.stringify({ action: 'update', userId: id, name, email, password: password || undefined, role })
+    });
+    const result = await res.json();
+    if(!res.ok || result.error){
+      errEl.textContent = result.error || 'Something went wrong.';
+      errEl.style.display = 'block';
+      return;
+    }
+    closeModal('editTeamModalOverlay');
+    showToast('Team member updated.');
+    renderTeam();
+  }catch(e){
+    errEl.textContent = 'Could not reach the server.';
+    errEl.style.display = 'block';
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Save changes';
+  }
+}
+
+async function deleteTeamMember(){
+  const id = document.getElementById('etmId').value;
+  const errEl = document.getElementById('editTeamModalError');
+  if(id === currentUser.id){
+    errEl.textContent = "You can't delete your own login while signed in as them.";
+    errEl.style.display = 'block';
+    return;
+  }
+  if(!confirm('Delete this login? They will no longer be able to sign in. This cannot be undone.')) return;
+
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(SUPABASE_URL + '/functions/v1/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token
+      },
+      body: JSON.stringify({ action: 'delete', userId: id })
+    });
+    const result = await res.json();
+    if(!res.ok || result.error){
+      errEl.textContent = result.error || 'Something went wrong.';
+      errEl.style.display = 'block';
+      return;
+    }
+    closeModal('editTeamModalOverlay');
+    showToast('Login deleted.');
+    renderTeam();
+  }catch(e){
+    errEl.textContent = 'Could not reach the server.';
+    errEl.style.display = 'block';
   }
 }
 
