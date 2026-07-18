@@ -338,7 +338,13 @@
             </select>
           </div>
           <div id="smartSkipSubfields" style="display:none;">
-            <div class="field"><label>Address for smart skip delivery</label><input id="obSmartSkipAddress" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Smart skip delivery — address line 1</label><input id="obSmartSkipAddr1" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Smart skip delivery — address line 2</label><input id="obSmartSkipAddr2"></div>
+            <div class="field-row">
+              <div class="field"><label>Town</label><input id="obSmartSkipTown" oninput="updateOnboardingProgress()"></div>
+              <div class="field"><label>County</label><input id="obSmartSkipCounty" oninput="updateOnboardingProgress()"></div>
+            </div>
+            <div class="field"><label>Postcode</label><input id="obSmartSkipPostcode" oninput="updateOnboardingProgress()"></div>
             <div class="field"><label>Asset number for smart skip</label><input id="obSmartSkipAsset" oninput="updateOnboardingProgress()"></div>
             <div class="field-row">
               <div class="field"><label>Delivery date</label><input id="obSmartSkipDeliveryDate" type="date" oninput="updateOnboardingProgress()"></div>
@@ -1009,7 +1015,8 @@ function orgRowToCamel(row){
     financePhone: row.finance_phone, financeEmail: row.finance_email, financeSendWTN: row.finance_send_wtn, financeInvoiceEmail: row.finance_invoice_email,
     wasteBagsRequired: row.waste_bags_required, wasteBagAddressLine1: row.waste_bag_address_line1, wasteBagAddressLine2: row.waste_bag_address_line2,
     wasteBagTown: row.waste_bag_town, wasteBagCounty: row.waste_bag_county, wasteBagPostcode: row.waste_bag_postcode, wasteBagAmount: row.waste_bag_amount,
-    smartSkipRequired: row.smart_skip_required, smartSkipAddress: row.smart_skip_address, smartSkipAssetNumber: row.smart_skip_asset_number,
+    smartSkipRequired: row.smart_skip_required, smartSkipAddressLine1: row.smart_skip_address_line1, smartSkipAddressLine2: row.smart_skip_address_line2,
+    smartSkipTown: row.smart_skip_town, smartSkipCounty: row.smart_skip_county, smartSkipPostcode: row.smart_skip_postcode, smartSkipAssetNumber: row.smart_skip_asset_number,
     smartSkipDeliveryDate: row.smart_skip_delivery_date, smartSkipGoLiveDate: row.smart_skip_go_live_date,
     propertyClearanceRequired: row.property_clearance_required, onboardingStatus: row.onboarding_status
   };
@@ -1024,7 +1031,8 @@ function camelToOrgRow(o){
     finance_phone: o.financePhone||null, finance_email: o.financeEmail||null, finance_send_wtn: !!o.financeSendWTN, finance_invoice_email: o.financeInvoiceEmail||null,
     waste_bags_required: o.wasteBagsRequired||null, waste_bag_address_line1: o.wasteBagAddressLine1||null, waste_bag_address_line2: o.wasteBagAddressLine2||null,
     waste_bag_town: o.wasteBagTown||null, waste_bag_county: o.wasteBagCounty||null, waste_bag_postcode: o.wasteBagPostcode||null, waste_bag_amount: o.wasteBagAmount||null,
-    smart_skip_required: o.smartSkipRequired||null, smart_skip_address: o.smartSkipAddress||null, smart_skip_asset_number: o.smartSkipAssetNumber||null,
+    smart_skip_required: o.smartSkipRequired||null, smart_skip_address_line1: o.smartSkipAddressLine1||null, smart_skip_address_line2: o.smartSkipAddressLine2||null,
+    smart_skip_town: o.smartSkipTown||null, smart_skip_county: o.smartSkipCounty||null, smart_skip_postcode: o.smartSkipPostcode||null, smart_skip_asset_number: o.smartSkipAssetNumber||null,
     smart_skip_delivery_date: o.smartSkipDeliveryDate||null, smart_skip_go_live_date: o.smartSkipGoLiveDate||null,
     property_clearance_required: o.propertyClearanceRequired||null, onboarding_status: o.onboardingStatus||'onboarding'
   };
@@ -1047,7 +1055,7 @@ const ONBOARDING_FIELD_INPUT_IDS = {
   contactFirstName:'obContactFirst', contactLastName:'obContactLast', contactJobTitle:'obContactJob', contactPhone:'obContactPhone', contactEmail:'obContactEmail',
   financeFirstName:'obFinanceFirst', financeLastName:'obFinanceLast', financeJobTitle:'obFinanceJob', financePhone:'obFinancePhone', financeEmail:'obFinanceEmail',
   wasteBagsRequired:'obWasteBags', wasteBagAddressLine1:'obWasteBagAddr1', wasteBagTown:'obWasteBagTown', wasteBagCounty:'obWasteBagCounty', wasteBagPostcode:'obWasteBagPostcode', wasteBagAmount:'obWasteBagAmount',
-  smartSkipRequired:'obSmartSkip', smartSkipAddress:'obSmartSkipAddress', smartSkipAssetNumber:'obSmartSkipAsset',
+  smartSkipRequired:'obSmartSkip', smartSkipAddressLine1:'obSmartSkipAddr1', smartSkipTown:'obSmartSkipTown', smartSkipCounty:'obSmartSkipCounty', smartSkipPostcode:'obSmartSkipPostcode', smartSkipAssetNumber:'obSmartSkipAsset',
   smartSkipDeliveryDate:'obSmartSkipDeliveryDate', smartSkipGoLiveDate:'obSmartSkipGoLiveDate',
   propertyClearanceRequired:'obPropertyClearance'
 };
@@ -1060,7 +1068,7 @@ const ONBOARDING_FIELD_LABELS = {
   financePhone:'Finance detail — Telephone', financeEmail:'Finance detail — Email',
   wasteBagsRequired:'Services required — Waste bags (Yes/No)', wasteBagAddressLine1:'Services required — Waste bag delivery address', wasteBagTown:'Services required — Waste bag delivery town', wasteBagPostcode:'Services required — Waste bag delivery postcode',
   wasteBagAmount:'Services required — Amount of waste bags to be delivered', smartSkipRequired:'Services required — Smart skip (Yes/No)',
-  smartSkipAddress:'Services required — Address for smart skip delivery', smartSkipAssetNumber:'Services required — Asset number for smart skip',
+  smartSkipAddressLine1:'Services required — Address for smart skip delivery', smartSkipTown:'Services required — Smart skip delivery town', smartSkipPostcode:'Services required — Smart skip delivery postcode', smartSkipAssetNumber:'Services required — Asset number for smart skip',
   smartSkipDeliveryDate:'Services required — Delivery date of smart skip', smartSkipGoLiveDate:'Services required — Go live date of smart skip',
   propertyClearanceRequired:'Services required — Property clearance (Yes/No)'
 };
@@ -1075,7 +1083,9 @@ function computeMissingOnboardingFields(values){
     if(!values.wasteBagAmount) missing.push('wasteBagAmount');
   }
   if(values.smartSkipRequired === 'yes'){
-    if(!values.smartSkipAddress) missing.push('smartSkipAddress');
+    if(!values.smartSkipAddressLine1) missing.push('smartSkipAddressLine1');
+    if(!values.smartSkipTown) missing.push('smartSkipTown');
+    if(!values.smartSkipPostcode) missing.push('smartSkipPostcode');
     if(!values.smartSkipAssetNumber) missing.push('smartSkipAssetNumber');
     if(!values.smartSkipDeliveryDate) missing.push('smartSkipDeliveryDate');
     if(!values.smartSkipGoLiveDate) missing.push('smartSkipGoLiveDate');
@@ -1165,7 +1175,11 @@ function openOnboardingDetail(orgId){
   document.getElementById('wasteBagSubfields').style.display = org.wasteBagsRequired==='yes' ? 'block' : 'none';
 
   document.getElementById('obSmartSkip').value = org.smartSkipRequired || '';
-  document.getElementById('obSmartSkipAddress').value = org.smartSkipAddress || '';
+  document.getElementById('obSmartSkipAddr1').value = org.smartSkipAddressLine1 || '';
+  document.getElementById('obSmartSkipAddr2').value = org.smartSkipAddressLine2 || '';
+  document.getElementById('obSmartSkipTown').value = org.smartSkipTown || '';
+  document.getElementById('obSmartSkipCounty').value = org.smartSkipCounty || '';
+  document.getElementById('obSmartSkipPostcode').value = org.smartSkipPostcode || '';
   document.getElementById('obSmartSkipAsset').value = org.smartSkipAssetNumber || '';
   document.getElementById('obSmartSkipDeliveryDate').value = org.smartSkipDeliveryDate || '';
   document.getElementById('obSmartSkipGoLiveDate').value = org.smartSkipGoLiveDate || '';
@@ -1218,7 +1232,11 @@ function collectOnboardingFormValues(){
     wasteBagPostcode: document.getElementById('obWasteBagPostcode').value.trim(),
     wasteBagAmount: document.getElementById('obWasteBagAmount').value.trim(),
     smartSkipRequired: document.getElementById('obSmartSkip').value,
-    smartSkipAddress: document.getElementById('obSmartSkipAddress').value.trim(),
+    smartSkipAddressLine1: document.getElementById('obSmartSkipAddr1').value.trim(),
+    smartSkipAddressLine2: document.getElementById('obSmartSkipAddr2').value.trim(),
+    smartSkipTown: document.getElementById('obSmartSkipTown').value.trim(),
+    smartSkipCounty: document.getElementById('obSmartSkipCounty').value.trim(),
+    smartSkipPostcode: document.getElementById('obSmartSkipPostcode').value.trim(),
     smartSkipAssetNumber: document.getElementById('obSmartSkipAsset').value.trim(),
     smartSkipDeliveryDate: document.getElementById('obSmartSkipDeliveryDate').value,
     smartSkipGoLiveDate: document.getElementById('obSmartSkipGoLiveDate').value,
@@ -1246,6 +1264,7 @@ async function saveOnboarding(){
   let onboardingStatus = 'onboarding';
   const existing = currentOnboardingOrgId ? organisations.find(o=>o.id===currentOnboardingOrgId) : null;
   const previousWasteBagsRequired = existing ? existing.waste_bags_required : null;
+  const previousSmartSkipRequired = existing ? existing.smart_skip_required : null;
   if(existing && existing.onboarding_status==='live'){
     const stillQualifies = computeMissingOnboardingFields(values).length === 0;
     onboardingStatus = stillQualifies ? 'live' : 'onboarding';
@@ -1264,7 +1283,8 @@ async function saveOnboarding(){
   await loadOrganisations();
   showToast('Onboarding progress saved.');
   showOnboardingList();
-  maybeStartWasteBagsChain(values, previousWasteBagsRequired, orgId);
+  await maybeStartWasteBagsChain(values, previousWasteBagsRequired, orgId);
+  await maybeStartSmartSkipTask(values, previousSmartSkipRequired, orgId);
 }
 
 async function toggleOnboardingLive(){
@@ -1694,11 +1714,31 @@ async function deleteAsset(){
 /* ---------- Tasks ---------- */
 const TASK_CHAINS = {
   waste_bags: [
-    { step: 1, key: 'po', title: (amount)=> 'Request PO for waste bags' + (amount ? ' ('+amount+' bags)' : '') },
-    { step: 2, key: 'delivery', title: ()=> 'Arrange delivery of waste bags' },
-    { step: 3, key: 'invoice', title: ()=> 'Raise invoice for waste bags' }
+    { step: 1, key: 'po', title: (ctx)=> 'Request PO for waste bags' + (ctx && ctx.amount ? ' ('+ctx.amount+' bags)' : ''),
+      notes: (ctx)=> 'Delivery address: ' + (ctx.address || '—') },
+    { step: 2, key: 'delivery', title: ()=> 'Arrange delivery of waste bags',
+      notes: (ctx)=> 'Deliver ' + (ctx.amount ? ctx.amount+' waste bags' : 'waste bags') + ' to: ' + (ctx.address || '—') + (ctx.poReference ? ' | PO: '+ctx.poReference : '') },
+    { step: 3, key: 'invoice', title: ()=> 'Raise invoice for waste bags',
+      notes: (ctx)=> (ctx.amount ? ('Quantity: '+ctx.amount+' bags. ') : '') + (ctx.poReference ? 'PO: '+ctx.poReference : '') }
   ]
 };
+
+/* Pulls the waste-bags amount/address/PO together from either the raw
+   Supabase row (snake_case) or the onboarding form's values (camelCase),
+   so both the initial task and every later step in the chain have the
+   same context to work from. */
+function buildWasteBagsTaskContext(org){
+  const amount = org.wasteBagAmount || org.waste_bag_amount || '';
+  const address = [
+    org.wasteBagAddressLine1 || org.waste_bag_address_line1,
+    org.wasteBagAddressLine2 || org.waste_bag_address_line2,
+    org.wasteBagTown || org.waste_bag_town,
+    org.wasteBagCounty || org.waste_bag_county,
+    org.wasteBagPostcode || org.waste_bag_postcode
+  ].filter(Boolean).join(', ');
+  const poReference = org.wasteBagPoReference || org.waste_bag_po_reference || '';
+  return { amount, address, poReference };
+}
 
 async function loadTeamMembers(){
   const { data, error } = await sb.from('profiles').select('id, name, email').order('name');
@@ -1896,14 +1936,17 @@ function continueTaskChainIfAny(task){
     const chain = TASK_CHAINS[task.chain_key];
     const next = chain.find(s=>s.step === (task.chain_step||0) + 1);
     if(next){
+      const org = task.organisation_id ? organisations.find(o=>o.id===task.organisation_id) : null;
+      const ctx = org ? buildWasteBagsTaskContext(org) : {};
       showToast('Task complete — set up the next step in this chain.');
       openTaskModal(null, {
-        modalTitle: 'Next step: ' + next.title(),
-        title: next.title(),
+        modalTitle: 'Next step: ' + next.title(ctx),
+        title: next.title(ctx),
         organisationId: task.organisation_id,
         chainKey: task.chain_key,
         chainStep: next.step,
-        assignedTo: task.assigned_to
+        assignedTo: task.assigned_to,
+        notes: next.notes ? next.notes(ctx) : ''
       });
       return;
     }
@@ -1942,18 +1985,51 @@ async function markPoReceivedAndComplete(){
 
 /* Called after onboarding is saved, to start the waste-bags task chain
    the first time a customer's waste bag requirement flips to "yes". */
-function maybeStartWasteBagsChain(org, previousWasteBagsRequired, orgId){
+async function maybeStartSmartSkipTask(org, previousSmartSkipRequired, orgId){
+  if(org.smartSkipRequired === 'yes' && previousSmartSkipRequired !== 'yes'){
+    const address = [
+      org.smartSkipAddressLine1, org.smartSkipAddressLine2, org.smartSkipTown, org.smartSkipCounty, org.smartSkipPostcode
+    ].filter(Boolean).join(', ');
+    const notesParts = [
+      'Delivery address: ' + (address || '—'),
+      org.smartSkipAssetNumber ? 'Asset number: ' + org.smartSkipAssetNumber : '',
+      org.smartSkipDeliveryDate ? 'Delivery date: ' + org.smartSkipDeliveryDate : '',
+      org.smartSkipGoLiveDate ? 'Go live date: ' + org.smartSkipGoLiveDate : ''
+    ].filter(Boolean);
+    const { error } = await sb.from('tasks').insert({
+      title: 'Arrange smart skip delivery',
+      notes: notesParts.join(' | '),
+      organisation_id: orgId,
+      assigned_to: currentUser.id,
+      created_by: currentUser.id,
+      status: 'todo'
+    });
+    if(error){ showToast('Could not create the smart skip task: ' + error.message, true); return; }
+    await loadTasks();
+    refreshOrgTasksSectionIfVisible();
+    showToast('Task created and assigned to you: "Arrange smart skip delivery"');
+  }
+}
+
+async function maybeStartWasteBagsChain(org, previousWasteBagsRequired, orgId){
   if(org.wasteBagsRequired === 'yes' && previousWasteBagsRequired !== 'yes'){
     const chain = TASK_CHAINS.waste_bags;
     const first = chain[0];
-    openTaskModal(null, {
-      modalTitle: 'New task: ' + first.title(org.wasteBagAmount),
-      title: first.title(org.wasteBagAmount),
-      organisationId: orgId,
-      chainKey: 'waste_bags',
-      chainStep: first.step,
-      notes: 'Delivery address: ' + [org.wasteBagAddressLine1, org.wasteBagAddressLine2, org.wasteBagTown, org.wasteBagCounty, org.wasteBagPostcode].filter(Boolean).join(', ')
+    const ctx = buildWasteBagsTaskContext(org);
+    const { error } = await sb.from('tasks').insert({
+      title: first.title(ctx),
+      notes: first.notes(ctx),
+      organisation_id: orgId,
+      assigned_to: currentUser.id,
+      created_by: currentUser.id,
+      status: 'todo',
+      chain_key: 'waste_bags',
+      chain_step: first.step
     });
+    if(error){ showToast('Could not create the PO task: ' + error.message, true); return; }
+    await loadTasks();
+    refreshOrgTasksSectionIfVisible();
+    showToast('Task created and assigned to you: "' + first.title(ctx) + '"');
   }
 }
 
