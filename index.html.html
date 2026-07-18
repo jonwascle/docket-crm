@@ -2636,7 +2636,7 @@ async function deleteSPWasteStation(){
 
 /* ---- Default pricing (shared starting point for every provider) ---- */
 async function loadSPDefaultPricing(){
-  const { data, error } = await sb.from('sp_default_pricing').select('*').order('category').order('service_name');
+  const { data, error } = await sb.from('sp_default_pricing').select('*').order('sort_order');
   if(error){ showToast('Could not load default pricing: ' + error.message, true); return; }
   spDefaultPricing = data || [];
 }
@@ -2662,11 +2662,16 @@ function renderSPDefaultPricingList(){
     if(!groups[cat]){ groups[cat] = []; order.push(cat); }
     groups[cat].push(row);
   });
-  let html = '<table class="qtable"><thead><tr><th>Service</th><th>Default rate</th></tr></thead><tbody>';
+  let html = '<table class="qtable"><thead><tr><th>Included?</th><th>Service</th><th>Default rate</th></tr></thead><tbody>';
   order.forEach(cat=>{
-    html += '<tr><td colspan="2" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
+    html += '<tr><td colspan="3" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
     groups[cat].forEach(row=>{
-      html += '<tr><td>'+escapeHtml(row.service_name)+'</td><td><input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPDefaultPricingRate(\''+row.id+'\', this.value)"></td></tr>';
+      const inactive = row.is_active === false;
+      html += '<tr style="'+(inactive?'opacity:0.5;':'')+'">';
+      html += '<td><input type="checkbox" '+(inactive?'':'checked')+' onchange="toggleSPDefaultPricingActive(\''+row.id+'\', this.checked)"></td>';
+      html += '<td>'+escapeHtml(row.service_name)+'</td>';
+      html += '<td><input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPDefaultPricingRate(\''+row.id+'\', this.value)"></td>';
+      html += '</tr>';
     });
   });
   html += '</tbody></table>';
@@ -2682,9 +2687,17 @@ async function updateSPDefaultPricingRate(id, value){
   showToast('Default rate updated.');
 }
 
+async function toggleSPDefaultPricingActive(id, checked){
+  const { error } = await sb.from('sp_default_pricing').update({ is_active: checked }).eq('id', id);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  const row = spDefaultPricing.find(r=>r.id===id);
+  if(row) row.is_active = checked;
+  renderSPDefaultPricingList();
+}
+
 /* ---- Per-provider pricing (starts from the default list, then editable per line) ---- */
 async function loadSPPricing(spId){
-  const { data, error } = await sb.from('service_provider_pricing').select('*').eq('service_provider_id', spId).order('category').order('service_name');
+  const { data, error } = await sb.from('service_provider_pricing').select('*').eq('service_provider_id', spId).order('sort_order');
   if(error){ showToast('Could not load pricing: ' + error.message, true); return; }
   spProviderPricing = data || [];
 
@@ -2695,11 +2708,11 @@ async function loadSPPricing(spId){
       await loadSPDefaultPricing();
     }
     const source = spDefaultPricing.length>0
-      ? spDefaultPricing.map(r=>({ service_name: r.service_name, category: r.category, rate: r.rate }))
-      : SERVICES.map(s=>({ service_name: s.name, category: s.category, rate: round2(s.price * 0.6) }));
+      ? spDefaultPricing.map(r=>({ service_name: r.service_name, category: r.category, rate: r.rate, sort_order: r.sort_order, is_active: r.is_active }))
+      : SERVICES.map((s,i)=>({ service_name: s.name, category: s.category, rate: round2(s.price * 0.6), sort_order: i, is_active: true }));
     if(source.length>0){
       const rows = source.map(r=>({ ...r, service_provider_id: spId }));
-      const { data: inserted, error: insertErr } = await sb.from('service_provider_pricing').insert(rows).select();
+      const { data: inserted, error: insertErr } = await sb.from('service_provider_pricing').insert(rows).select().order('sort_order');
       if(insertErr){ showToast('Could not set up pricing: ' + insertErr.message, true); return; }
       spProviderPricing = inserted || [];
     }
@@ -2724,11 +2737,16 @@ function renderSPPricingList(){
     if(!groups[cat]){ groups[cat] = []; order.push(cat); }
     groups[cat].push(row);
   });
-  let html = '<table class="qtable"><thead><tr><th>Service</th><th>This provider\'s rate</th></tr></thead><tbody>';
+  let html = '<table class="qtable"><thead><tr><th>Included?</th><th>Service</th><th>This provider\'s rate</th></tr></thead><tbody>';
   order.forEach(cat=>{
-    html += '<tr><td colspan="2" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
+    html += '<tr><td colspan="3" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
     groups[cat].forEach(row=>{
-      html += '<tr><td>'+escapeHtml(row.service_name)+'</td><td><input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPProviderPricingRate(\''+row.id+'\', this.value)"></td></tr>';
+      const inactive = row.is_active === false;
+      html += '<tr style="'+(inactive?'opacity:0.5;':'')+'">';
+      html += '<td><input type="checkbox" '+(inactive?'':'checked')+' onchange="toggleSPProviderPricingActive(\''+row.id+'\', this.checked)"></td>';
+      html += '<td>'+escapeHtml(row.service_name)+'</td>';
+      html += '<td><input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPProviderPricingRate(\''+row.id+'\', this.value)"></td>';
+      html += '</tr>';
     });
   });
   html += '</tbody></table>';
@@ -2744,17 +2762,26 @@ async function updateSPProviderPricingRate(id, value){
   showToast('Rate updated.');
 }
 
+async function toggleSPProviderPricingActive(id, checked){
+  const { error } = await sb.from('service_provider_pricing').update({ is_active: checked }).eq('id', id);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  const row = spProviderPricing.find(r=>r.id===id);
+  if(row) row.is_active = checked;
+  renderSPPricingList();
+}
+
 async function applySPPricingBulkAdjust(){
   if(!currentSPId || spProviderPricing.length===0) return;
   const pct = Number(document.getElementById('spPricingBulkAdjust').value);
   if(!pct){ showToast('Enter a percentage to apply first.', true); return; }
   for(const row of spProviderPricing){
+    if(row.is_active === false) continue;
     row.rate = round2(row.rate * (1 + pct/100));
     await sb.from('service_provider_pricing').update({ rate: row.rate }).eq('id', row.id);
   }
   document.getElementById('spPricingBulkAdjust').value = '';
   renderSPPricingList();
-  showToast('Applied ' + pct + '% to every line.');
+  showToast('Applied ' + pct + '% to every included line.');
 }
 
 async function resetSPPricingToDefault(){
@@ -2769,8 +2796,9 @@ async function resetSPPricingToDefault(){
 function downloadSPPricingPdf(){
   if(!currentSPId) return;
   const sp = serviceProviders.find(s=>s.id===currentSPId);
-  if(!sp || spProviderPricing.length===0) return;
-  const items = spProviderPricing.map(r=>({ name: r.service_name, category: r.category, basePrice: r.rate }));
+  const activeItems = spProviderPricing.filter(r=>r.is_active !== false);
+  if(!sp || activeItems.length===0){ showToast('No included pricing lines to put in the PDF.', true); return; }
+  const items = activeItems.map(r=>({ name: r.service_name, category: r.category, basePrice: r.rate }));
   const pseudoQuote = { id: sp.id, contactId: null, createdAt: Date.now(), adjustmentPct: 0, items };
   const pseudoContact = { name: sp.name, email: sp.email, organisation_id: null };
   const pdfString = buildQuotePdfString(pseudoQuote, pseudoContact, {
