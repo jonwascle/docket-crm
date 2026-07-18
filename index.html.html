@@ -168,8 +168,8 @@
     <h1>Docket</h1>
     <p>Sign in with the login your admin created for you. Welcome back!</p>
     <div class="login-error" id="loginError"></div>
-    <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username"></div>
-    <div class="field"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password"></div>
+    <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"></div>
+    <div class="field"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"></div>
     <button class="btn" onclick="doLogin()">Sign in</button>
   </div>
 </div>
@@ -553,10 +553,10 @@
           </div>
           <p style="font-size:13px;color:var(--slate);margin-top:0;">These are the rates we pay this service provider. Started from the default price list — edit any line below to change it just for them.</p>
           <div class="field-row" style="align-items:flex-end;">
-            <div class="field" style="max-width:220px;"><label>Adjust all lines by (%)</label>
+            <div class="field" style="max-width:220px;" id="spPricingBulkAdjustField"><label>Adjust all lines by (%)</label>
               <input id="spPricingBulkAdjust" type="number" step="0.1" placeholder="e.g. -5 or 10">
             </div>
-            <button class="btn ghost small" onclick="applySPPricingBulkAdjust()" style="margin-bottom:14px;">Apply to all</button>
+            <button class="btn ghost small" id="spPricingBulkApplyBtn" onclick="applySPPricingBulkAdjust()" style="margin-bottom:14px;">Apply to all</button>
             <button class="btn ghost small" onclick="resetSPPricingToDefault()" style="margin-bottom:14px;">Reset to default pricing</button>
             <button class="btn small" onclick="downloadSPPricingPdf()" style="margin-bottom:14px;">Download pricing PDF</button>
           </div>
@@ -823,9 +823,11 @@
   <div class="modal">
     <p class="modal-title"><span id="spDocumentModalTitle">Upload document</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('spDocumentModalOverlay')">✕</span></p>
     <input type="hidden" id="spDocumentId">
+    <input type="hidden" id="spDocumentTypeKey">
     <div class="login-error" id="spDocumentModalError"></div>
-    <div class="field"><label>Document name</label><input id="spDocumentName" placeholder="e.g. Insurance, Jon Smith"></div>
+    <div class="field" id="spDocumentNameField"><label>Document name</label><input id="spDocumentName" placeholder="e.g. Insurance, Jon Smith"></div>
     <div class="field" id="spDocumentFileField"><label>File</label><input id="spDocumentFile" type="file"></div>
+    <div class="field" id="spDocumentTextValueField" style="display:none;"><label id="spDocumentTextValueLabel">Value</label><input id="spDocumentTextValue"></div>
     <div class="field"><label>Reminder — expiry date (optional)</label><input id="spDocumentExpiryDate" type="date"></div>
     <p style="font-size:12px;color:var(--slate);margin-top:-8px;">Leave this blank if this document doesn't need renewing (e.g. a photo). If you set a date, a task will be created to get a replacement.</p>
     <div class="modal-actions">
@@ -912,6 +914,11 @@ let spWasteStations = [];
 let spDefaultPricing = [];
 let spProviderPricing = [];
 let currentSPServiceGroups = [];
+const SP_STANDARD_DOCUMENT_TYPES = [
+  { key: 'public_liability_insurance', label: 'Public liability insurance certificate', requiresFile: true },
+  { key: 'waste_carriers_licence', label: 'Waste Carriers Licence', requiresFile: false, valueLabel: 'Waste carriers licence number' },
+  { key: 'employers_liability_insurance', label: 'Employers liability insurance certificate', requiresFile: true }
+];
 const SP_SERVICE_GROUPS = [
   { key: 'smart_skips', label: 'Smart skips', categories: ['Smart skips', 'Chargeable extras'] },
   { key: 'property_clearance', label: 'Property clearance', categories: ['Property clearance', 'Price per cubic yard'] },
@@ -2366,7 +2373,9 @@ async function deleteServiceProvider(){
   if(!currentSPId) return;
   if(!confirm('Delete this service provider? This will also delete all their documents, team members, and waste transfer stations. This cannot be undone.')) return;
   for(const doc of spDocuments){
-    await sb.storage.from('service-provider-documents').remove([doc.file_path]);
+    if(doc.file_path){
+      await sb.storage.from('service-provider-documents').remove([doc.file_path]);
+    }
   }
   const { error } = await sb.from('service_providers').delete().eq('id', currentSPId);
   if(error){ showToast('Could not delete: ' + error.message, true); return; }
@@ -2389,20 +2398,44 @@ function renderSPDocuments(){
     container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then documents can be added here.</p>';
     return;
   }
-  if(spDocuments.length===0){
-    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">No documents uploaded yet.</p>';
-    return;
-  }
   const today = new Date().toISOString().slice(0,10);
-  let html = '';
-  spDocuments.forEach(doc=>{
-    const isExpired = doc.expiry_date && doc.expiry_date < today;
-    html += '<div class="doc-row">';
-    html += '<div style="cursor:pointer;" onclick="openSPDocumentModal(\''+doc.id+'\')"><div class="doc-row-name">'+escapeHtml(doc.document_name)+'</div>';
-    html += '<div class="doc-row-meta'+(isExpired?' doc-row-expired':'')+'">'+(doc.expiry_date ? ('Expires '+new Date(doc.expiry_date).toLocaleDateString('en-GB')+(isExpired?' — EXPIRED':'')) : 'No expiry reminder set')+'</div></div>';
-    html += '<button class="btn ghost small" onclick="event.stopPropagation();downloadSPDocument(\''+doc.id+'\')">Download</button>';
-    html += '</div>';
+  let html = '<p style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);margin:0 0 8px;">Standard documents</p>';
+  SP_STANDARD_DOCUMENT_TYPES.forEach(type=>{
+    const doc = spDocuments.find(d=>d.document_type===type.key);
+    if(!doc){
+      html += '<div class="doc-row">';
+      html += '<div><div class="doc-row-name">'+escapeHtml(type.label)+'</div><div class="doc-row-meta">Not added yet</div></div>';
+      html += '<button class="btn ghost small" onclick="openSPDocumentModal(null, \''+type.key+'\')">+ Add</button>';
+      html += '</div>';
+    }else{
+      const isExpired = doc.expiry_date && doc.expiry_date < today;
+      const metaBits = [];
+      if(!type.requiresFile && doc.text_value) metaBits.push(escapeHtml(doc.text_value));
+      metaBits.push(doc.expiry_date ? ('Expires '+new Date(doc.expiry_date).toLocaleDateString('en-GB')+(isExpired?' — EXPIRED':'')) : 'No expiry reminder set');
+      html += '<div class="doc-row" style="cursor:pointer;" onclick="openSPDocumentModal(\''+doc.id+'\')">';
+      html += '<div><div class="doc-row-name">'+escapeHtml(type.label)+'</div>';
+      html += '<div class="doc-row-meta'+(isExpired?' doc-row-expired':'')+'">'+metaBits.join(' · ')+'</div></div>';
+      if(type.requiresFile){
+        html += '<button class="btn ghost small" onclick="event.stopPropagation();downloadSPDocument(\''+doc.id+'\')">Download</button>';
+      }
+      html += '</div>';
+    }
   });
+
+  const otherDocs = spDocuments.filter(d=>!d.document_type);
+  html += '<p style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);margin:18px 0 8px;">Other documents</p>';
+  if(otherDocs.length===0){
+    html += '<p style="color:var(--slate);font-size:13px;">No other documents uploaded yet.</p>';
+  }else{
+    otherDocs.forEach(doc=>{
+      const isExpired = doc.expiry_date && doc.expiry_date < today;
+      html += '<div class="doc-row">';
+      html += '<div style="cursor:pointer;" onclick="openSPDocumentModal(\''+doc.id+'\')"><div class="doc-row-name">'+escapeHtml(doc.document_name)+'</div>';
+      html += '<div class="doc-row-meta'+(isExpired?' doc-row-expired':'')+'">'+(doc.expiry_date ? ('Expires '+new Date(doc.expiry_date).toLocaleDateString('en-GB')+(isExpired?' — EXPIRED':'')) : 'No expiry reminder set')+'</div></div>';
+      html += '<button class="btn ghost small" onclick="event.stopPropagation();downloadSPDocument(\''+doc.id+'\')">Download</button>';
+      html += '</div>';
+    });
+  }
   container.innerHTML = html;
 }
 
@@ -2414,15 +2447,29 @@ async function downloadSPDocument(docId){
   window.open(data.signedUrl, '_blank');
 }
 
-function openSPDocumentModal(id){
+function openSPDocumentModal(id, standardTypeKey){
   const doc = id ? spDocuments.find(d=>d.id===id) : null;
+  const typeKey = standardTypeKey || (doc && doc.document_type) || '';
+  const standardType = typeKey ? SP_STANDARD_DOCUMENT_TYPES.find(t=>t.key===typeKey) : null;
+  const requiresFile = standardType ? standardType.requiresFile : true;
+
   document.getElementById('spDocumentId').value = id || '';
-  document.getElementById('spDocumentModalTitle').textContent = doc ? 'Edit document' : 'Upload document';
-  document.getElementById('spDocumentName').value = doc ? doc.document_name : '';
+  document.getElementById('spDocumentTypeKey').value = typeKey;
+  document.getElementById('spDocumentModalTitle').textContent = doc ? 'Edit document' : (standardType ? standardType.label : 'Upload document');
+
+  document.getElementById('spDocumentNameField').style.display = standardType ? 'none' : 'block';
+  document.getElementById('spDocumentName').value = doc ? doc.document_name : (standardType ? standardType.label : '');
+
   document.getElementById('spDocumentExpiryDate').value = doc ? (doc.expiry_date||'') : '';
+
   document.getElementById('spDocumentFile').value = '';
-  document.getElementById('spDocumentFileField').style.display = doc ? 'none' : 'block';
-  document.getElementById('spDocumentSaveBtn').textContent = doc ? 'Save changes' : 'Upload';
+  document.getElementById('spDocumentFileField').style.display = (requiresFile && !doc) ? 'block' : 'none';
+
+  document.getElementById('spDocumentTextValueField').style.display = !requiresFile ? 'block' : 'none';
+  document.getElementById('spDocumentTextValueLabel').textContent = (standardType && standardType.valueLabel) || 'Value';
+  document.getElementById('spDocumentTextValue').value = doc ? (doc.text_value||'') : '';
+
+  document.getElementById('spDocumentSaveBtn').textContent = doc ? 'Save changes' : (requiresFile ? 'Upload' : 'Save');
   document.getElementById('spDocumentDeleteBtn').style.display = doc ? 'inline-flex' : 'none';
   document.getElementById('spDocumentModalError').style.display = 'none';
   document.getElementById('spDocumentModalOverlay').classList.add('active');
@@ -2430,7 +2477,10 @@ function openSPDocumentModal(id){
 
 async function saveSPDocument(){
   const id = document.getElementById('spDocumentId').value;
-  const name = document.getElementById('spDocumentName').value.trim();
+  const typeKey = document.getElementById('spDocumentTypeKey').value || null;
+  const standardType = typeKey ? SP_STANDARD_DOCUMENT_TYPES.find(t=>t.key===typeKey) : null;
+  const requiresFile = standardType ? standardType.requiresFile : true;
+  const name = standardType ? standardType.label : document.getElementById('spDocumentName').value.trim();
   const expiryDate = document.getElementById('spDocumentExpiryDate').value || null;
   const errEl = document.getElementById('spDocumentModalError');
   errEl.style.display = 'none';
@@ -2439,12 +2489,18 @@ async function saveSPDocument(){
   if(id){
     const existing = spDocuments.find(d=>d.id===id);
     const hadExpiry = existing && existing.expiry_date;
-    const { error } = await sb.from('service_provider_documents').update({ document_name: name, expiry_date: expiryDate }).eq('id', id);
+    const updatePayload = { document_name: name, expiry_date: expiryDate };
+    if(!requiresFile){
+      const textValue = document.getElementById('spDocumentTextValue').value.trim();
+      if(!textValue){ errEl.textContent = (standardType.valueLabel||'A value') + ' is required.'; errEl.style.display = 'block'; return; }
+      updatePayload.text_value = textValue;
+    }
+    const { error } = await sb.from('service_provider_documents').update(updatePayload).eq('id', id);
     if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
     if(expiryDate && !hadExpiry){
       await createDocumentExpiryTask(existing.service_provider_id, name, expiryDate);
     }
-  }else{
+  }else if(requiresFile){
     const fileInput = document.getElementById('spDocumentFile');
     const file = fileInput.files[0];
     if(!file){ errEl.textContent = 'Choose a file to upload.'; errEl.style.display = 'block'; return; }
@@ -2458,9 +2514,20 @@ async function saveSPDocument(){
     }
     const { error } = await sb.from('service_provider_documents').insert({
       service_provider_id: currentSPId, document_name: name, file_path: path, original_file_name: file.name,
-      expiry_date: expiryDate, uploaded_by: currentUser.id
+      expiry_date: expiryDate, uploaded_by: currentUser.id, document_type: typeKey
     });
     btn.disabled = false; btn.textContent = 'Upload';
+    if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+    if(expiryDate){
+      await createDocumentExpiryTask(currentSPId, name, expiryDate);
+    }
+  }else{
+    const textValue = document.getElementById('spDocumentTextValue').value.trim();
+    if(!textValue){ errEl.textContent = (standardType.valueLabel||'A value') + ' is required.'; errEl.style.display = 'block'; return; }
+    const { error } = await sb.from('service_provider_documents').insert({
+      service_provider_id: currentSPId, document_name: name, text_value: textValue,
+      expiry_date: expiryDate, uploaded_by: currentUser.id, document_type: typeKey
+    });
     if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
     if(expiryDate){
       await createDocumentExpiryTask(currentSPId, name, expiryDate);
@@ -2493,7 +2560,7 @@ async function deleteSPDocument(){
   if(!id) return;
   if(!confirm('Delete this document? This cannot be undone.')) return;
   const doc = spDocuments.find(d=>d.id===id);
-  if(doc){
+  if(doc && doc.file_path){
     await sb.storage.from('service-provider-documents').remove([doc.file_path]);
   }
   const { error } = await sb.from('service_provider_documents').delete().eq('id', id);
@@ -2775,6 +2842,9 @@ function spVisiblePricingRows(){
 
 function renderSPPricingList(){
   const container = document.getElementById('spPricingListContainer');
+  const isAdmin = currentProfile.role === 'admin';
+  document.getElementById('spPricingBulkAdjustField').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('spPricingBulkApplyBtn').style.display = isAdmin ? 'inline-flex' : 'none';
   if(!currentSPId){
     container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then their pricing sheet can be set up here.</p>';
     return;
@@ -2803,7 +2873,9 @@ function renderSPPricingList(){
       html += '<tr style="'+(inactive?'opacity:0.5;':'')+'">';
       html += '<td><input type="checkbox" '+(inactive?'':'checked')+' onchange="toggleSPProviderPricingActive(\''+row.id+'\', this.checked)"></td>';
       html += '<td>'+escapeHtml(row.service_name)+'</td>';
-      html += '<td><input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPProviderPricingRate(\''+row.id+'\', this.value)"></td>';
+      html += '<td>'+(isAdmin
+        ? '<input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPProviderPricingRate(\''+row.id+'\', this.value)">'
+        : '<b>'+fmtMoney(row.rate)+'</b>')+'</td>';
       html += '</tr>';
     });
   });
@@ -2812,6 +2884,7 @@ function renderSPPricingList(){
 }
 
 async function updateSPProviderPricingRate(id, value){
+  if(currentProfile.role !== 'admin'){ showToast('Only admins can change pricing.', true); renderSPPricingList(); return; }
   const rate = Number(value) || 0;
   const { error } = await sb.from('service_provider_pricing').update({ rate }).eq('id', id);
   if(error){ showToast('Could not save: ' + error.message, true); return; }
@@ -2829,6 +2902,7 @@ async function toggleSPProviderPricingActive(id, checked){
 }
 
 async function applySPPricingBulkAdjust(){
+  if(currentProfile.role !== 'admin'){ showToast('Only admins can change pricing.', true); return; }
   if(!currentSPId || spProviderPricing.length===0) return;
   const pct = Number(document.getElementById('spPricingBulkAdjust').value);
   if(!pct){ showToast('Enter a percentage to apply first.', true); return; }
