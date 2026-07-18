@@ -127,6 +127,10 @@
   .cart-item-total{font-weight:600;color:var(--ink);}
   .cart-actions{display:flex;gap:8px;margin-top:14px;}
   .cart-actions .btn{flex:1;}
+  .org-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--paper-card);border:1px solid var(--border);border-radius:6px;margin-top:2px;max-height:200px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+  .org-suggestion-item{padding:9px 12px;font-size:13.5px;cursor:pointer;}
+  .org-suggestion-item:hover{background:var(--paper-card-alt);}
+  .org-suggestion-item.add-new{color:var(--stamp-green);font-weight:600;border-top:1px solid var(--border);}
 </style>
 </head>
 <body>
@@ -436,8 +440,11 @@
     <p class="modal-title"><span id="contactModalTitle">New contact</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('contactModalOverlay')">✕</span></p>
     <input type="hidden" id="contactId">
     <div class="field"><label>Name</label><input id="cName"></div>
-    <div class="field"><label>Organisation</label>
-      <select id="cOrganisationId"><option value="">— None —</option></select>
+    <div class="field" style="position:relative;">
+      <label>Organisation (required)</label>
+      <input id="cOrgSearch" autocomplete="off" placeholder="Search for an organisation, or type a new name" oninput="onOrgSearchInput()" onfocus="onOrgSearchInput()">
+      <input type="hidden" id="cOrganisationId">
+      <div id="orgSuggestions" class="org-suggestions" style="display:none;"></div>
     </div>
     <div class="field"><label>Job title</label><input id="cTitle"></div>
     <div class="field"><label>Email</label><input id="cEmail"></div>
@@ -679,9 +686,6 @@ async function loadOrganisations(){
   const { data, error } = await sb.from('organisations').select('*').order('name');
   if(error){ showToast('Could not load organisations: ' + error.message, true); return; }
   organisations = data || [];
-  const sel = document.getElementById('cOrganisationId');
-  sel.innerHTML = '<option value="">— None —</option>' +
-    organisations.map(o=>'<option value="'+o.id+'">'+escapeHtml(o.name)+'</option>').join('');
 }
 
 /* ---------- Contacts CRUD ---------- */
@@ -733,6 +737,8 @@ function openContactModal(id){
   document.getElementById('contactModalTitle').textContent = c ? 'Edit contact' : 'New contact';
   document.getElementById('cName').value = c ? c.name : '';
   document.getElementById('cOrganisationId').value = c ? (c.organisation_id||'') : '';
+  document.getElementById('cOrgSearch').value = (c && c.organisation_id) ? (orgName(c)||'') : '';
+  document.getElementById('orgSuggestions').style.display = 'none';
   document.getElementById('cTitle').value = c ? (c.title||'') : '';
   document.getElementById('cEmail').value = c ? (c.email||'') : '';
   document.getElementById('cPhone').value = c ? (c.phone||'') : '';
@@ -745,9 +751,15 @@ async function saveContact(){
   const id = document.getElementById('contactId').value;
   const name = document.getElementById('cName').value.trim();
   if(!name){ showToast('Name is required.', true); return; }
+  const organisationId = document.getElementById('cOrganisationId').value;
+  if(!organisationId){
+    showToast('Select an organisation, or type a new name and choose "Add as new organisation".', true);
+    document.getElementById('cOrgSearch').focus();
+    return;
+  }
   const payload = {
     name,
-    organisation_id: document.getElementById('cOrganisationId').value || null,
+    organisation_id: organisationId,
     title: document.getElementById('cTitle').value.trim(),
     email: document.getElementById('cEmail').value.trim(),
     phone: document.getElementById('cPhone').value.trim(),
@@ -765,6 +777,64 @@ async function saveContact(){
   renderContacts();
   showToast('Contact saved.');
 }
+
+function onOrgSearchInput(){
+  const raw = document.getElementById('cOrgSearch').value;
+  const q = raw.trim().toLowerCase();
+  // Typing invalidates whatever was previously selected until they pick again.
+  document.getElementById('cOrganisationId').value = '';
+  const list = document.getElementById('orgSuggestions');
+
+  const matches = q ? organisations.filter(o=>o.name.toLowerCase().includes(q)) : organisations.slice();
+  matches.sort((a,b)=>a.name.localeCompare(b.name));
+  const exactMatch = q && organisations.some(o=>o.name.toLowerCase()===q);
+
+  let html = '';
+  matches.slice(0, 8).forEach(o=>{
+    html += '<div class="org-suggestion-item" onmousedown="selectOrgSuggestion(\''+o.id+'\')">'+escapeHtml(o.name)+'</div>';
+  });
+  if(q && !exactMatch){
+    html += '<div class="org-suggestion-item add-new" onmousedown="createAndSelectOrgForContact()">+ Add "'+escapeHtml(raw.trim())+'" as new organisation</div>';
+  }
+  if(!html){
+    html = '<div class="org-suggestion-item" style="color:var(--slate);cursor:default;">Type to search or add an organisation</div>';
+  }
+  list.innerHTML = html;
+  list.style.display = 'block';
+}
+
+function selectOrgSuggestion(id){
+  const org = organisations.find(o=>o.id===id);
+  if(!org) return;
+  document.getElementById('cOrganisationId').value = org.id;
+  document.getElementById('cOrgSearch').value = org.name;
+  document.getElementById('orgSuggestions').style.display = 'none';
+}
+
+async function createAndSelectOrgForContact(){
+  const name = document.getElementById('cOrgSearch').value.trim();
+  if(!name) return;
+  const existing = organisations.find(o=>o.name.toLowerCase()===name.toLowerCase());
+  if(existing){
+    selectOrgSuggestion(existing.id);
+    return;
+  }
+  const { data, error } = await sb.from('organisations').insert({ name, onboarding_status: 'onboarding' }).select().single();
+  if(error){ showToast('Could not create organisation: ' + error.message, true); return; }
+  await loadOrganisations();
+  document.getElementById('cOrganisationId').value = data.id;
+  document.getElementById('cOrgSearch').value = data.name;
+  document.getElementById('orgSuggestions').style.display = 'none';
+  showToast('Organisation added.');
+}
+
+document.addEventListener('click', function(e){
+  const box = document.getElementById('orgSuggestions');
+  const input = document.getElementById('cOrgSearch');
+  if(box && input && e.target !== box && e.target !== input && !box.contains(e.target)){
+    box.style.display = 'none';
+  }
+});
 
 async function deleteContact(){
   const id = document.getElementById('contactId').value;
