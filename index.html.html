@@ -919,6 +919,38 @@ let spWasteStations = [];
 let spDefaultPricing = [];
 let spProviderPricing = [];
 let currentSPServiceGroups = [];
+// Approximate centre point for every UK postcode AREA (the letters-only
+// part, e.g. "TR" rather than a specific district like "TR4"). Used only
+// when someone enters a coverage area with no number — postcodes.io itself
+// doesn't support looking those up directly, only full districts.
+const UK_POSTCODE_AREA_CENTROIDS = {
+  AB:[57.15,-2.11], AL:[51.75,-0.34], B:[52.48,-1.90], BA:[51.28,-2.44], BB:[53.75,-2.48],
+  BD:[53.79,-1.75], BH:[50.75,-1.87], BL:[53.58,-2.43], BN:[50.82,-0.14], BR:[51.40,0.02],
+  BS:[51.45,-2.59], BT:[54.60,-5.93], CA:[54.89,-2.93], CB:[52.20,0.12], CF:[51.48,-3.18],
+  CH:[53.19,-2.89], CM:[51.74,0.47], CO:[51.89,0.90], CR:[51.37,-0.10], CT:[51.28,1.08],
+  CV:[52.41,-1.51], CW:[53.10,-2.44], DA:[51.45,0.22], DD:[56.46,-2.97], DE:[52.92,-1.48],
+  DG:[55.07,-3.60], DH:[54.78,-1.57], DL:[54.52,-1.55], DN:[53.52,-1.13], DT:[50.71,-2.44],
+  DY:[52.45,-2.15], E:[51.53,-0.02], EC:[51.51,-0.09], EH:[55.95,-3.19], EN:[51.65,-0.08],
+  EX:[50.72,-3.53], FK:[56.00,-3.79], FY:[53.82,-3.03], G:[55.86,-4.25], GL:[51.86,-2.24],
+  GU:[51.24,-0.58], GY:[49.46,-2.58], HA:[51.58,-0.34], HD:[53.65,-1.78], HG:[54.00,-1.54],
+  HP:[51.75,-0.66], HR:[52.06,-2.72], HS:[57.85,-6.79], HU:[53.74,-0.34], HX:[53.72,-1.86],
+  IG:[51.56,0.08], IM:[54.15,-4.48], IP:[52.06,1.15], IV:[57.48,-4.22], JE:[49.19,-2.11],
+  KA:[55.61,-4.50], KT:[51.41,-0.30], KW:[58.97,-2.96], KY:[56.12,-3.16], L:[53.41,-2.98],
+  LA:[54.05,-2.80], LD:[52.24,-3.38], LE:[52.64,-1.13], LL:[53.20,-3.83], LN:[53.23,-0.54],
+  LS:[53.80,-1.55], LU:[51.88,-0.42], M:[53.48,-2.24], ME:[51.37,0.53], MK:[52.04,-0.76],
+  ML:[55.78,-3.99], N:[51.57,-0.10], NE:[54.98,-1.61], NG:[52.95,-1.15], NN:[52.24,-0.90],
+  NP:[51.59,-2.99], NR:[52.63,1.30], NW:[51.54,-0.18], OL:[53.54,-2.12], OX:[51.75,-1.26],
+  PA:[55.84,-4.65], PE:[52.57,-0.24], PH:[56.40,-3.44], PL:[50.37,-4.14], PO:[50.80,-1.09],
+  PR:[53.76,-2.70], RG:[51.46,-0.98], RH:[51.11,-0.19], RM:[51.58,0.18], S:[53.38,-1.47],
+  SA:[51.62,-3.94], SE:[51.48,-0.06], SG:[51.90,-0.20], SK:[53.35,-2.16], SL:[51.51,-0.60],
+  SM:[51.36,-0.19], SN:[51.56,-1.78], SO:[50.91,-1.40], SP:[51.07,-1.79], SR:[54.90,-1.38],
+  SS:[51.55,0.71], ST:[53.00,-2.18], SW:[51.48,-0.17], SY:[52.71,-2.75], TA:[51.02,-3.10],
+  TD:[55.60,-2.78], TF:[52.68,-2.45], TN:[51.13,0.26], TQ:[50.47,-3.57], TR:[50.26,-5.05],
+  TS:[54.57,-1.23], TW:[51.45,-0.35], UB:[51.54,-0.44], WA:[53.39,-2.60], WC:[51.52,-0.12],
+  WD:[51.66,-0.42], WF:[53.68,-1.50], WN:[53.55,-2.63], WR:[52.19,-2.22], WS:[52.59,-1.98],
+  WV:[52.59,-2.13], W:[51.51,-0.22], YO:[54.00,-1.09], ZE:[60.15,-1.15]
+};
+
 const SP_STANDARD_DOCUMENT_TYPES = [
   { key: 'public_liability_insurance', label: 'Public liability insurance certificate', requiresFile: true },
   { key: 'waste_carriers_licence', label: 'Waste Carriers Licence', requiresFile: false, valueLabel: 'Waste carriers licence number' },
@@ -2348,21 +2380,35 @@ async function renderSPCoverageMap(){
 
   const needLookup = currentSPPostcodeAreas.filter(pc=>!spOutcodeCoordsCache[pc]);
   if(needLookup.length > 0){
-    statusEl.textContent = 'Looking up ' + needLookup.length + ' postcode area' + (needLookup.length===1?'':'s') + '…';
-    try{
-      await Promise.all(needLookup.map(async pc=>{
-        try{
-          const res = await fetch('https://api.postcodes.io/outcodes/' + encodeURIComponent(pc));
-          const data = await res.json();
-          if(data && data.result){
-            spOutcodeCoordsCache[pc] = { lat: data.result.latitude, lng: data.result.longitude };
+    // Letters-only entries (e.g. "TR") come from the built-in area table —
+    // postcodes.io only understands full districts like "TR4".
+    const areaOnly = needLookup.filter(pc=>/^[A-Z]+$/.test(pc));
+    const withDistrict = needLookup.filter(pc=>!/^[A-Z]+$/.test(pc));
+
+    areaOnly.forEach(pc=>{
+      const centroid = UK_POSTCODE_AREA_CENTROIDS[pc];
+      if(centroid){
+        spOutcodeCoordsCache[pc] = { lat: centroid[0], lng: centroid[1] };
+      }
+    });
+
+    if(withDistrict.length > 0){
+      statusEl.textContent = 'Looking up ' + withDistrict.length + ' postcode area' + (withDistrict.length===1?'':'s') + '…';
+      try{
+        await Promise.all(withDistrict.map(async pc=>{
+          try{
+            const res = await fetch('https://api.postcodes.io/outcodes/' + encodeURIComponent(pc));
+            const data = await res.json();
+            if(data && data.result){
+              spOutcodeCoordsCache[pc] = { lat: data.result.latitude, lng: data.result.longitude };
+            }
+          }catch(innerErr){
+            // Leave this one out of the cache — it'll just show as "not recognised" below.
           }
-        }catch(innerErr){
-          // Leave this one out of the cache — it'll just show as "not recognised" below.
-        }
-      }));
-    }catch(e){
-      showToast('Could not look up postcode areas — check your connection and try again.', true);
+        }));
+      }catch(e){
+        showToast('Could not look up postcode areas — check your connection and try again.', true);
+      }
     }
   }
 
@@ -3813,4 +3859,3 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
-
