@@ -1015,6 +1015,12 @@ let spDefaultPricing = [];
 let spProviderPricing = [];
 let currentSPRecruitmentStage = 'prospect';
 let spOnboardingLinks = [];
+const SP_FUNCTIONS_URL = 'https://sjqjqthjvohebnjtaqaz.supabase.co/functions/v1/';
+let pubOnboardToken = null;
+let pubTeamMembers = [];
+let pubWasteStations = [];
+let pubOtherDocs = [];
+let pubStandardDocFiles = {};
 let currentSPServiceGroups = [];
 // Approximate centre point for every UK postcode AREA (the letters-only
 // part, e.g. "TR" rather than a specific district like "TR4"). Used only
@@ -3429,12 +3435,6 @@ function copyTextToClipboard(text){
 }
 
 /* ---------- Public supplier onboarding form (no login) ---------- */
-const SP_FUNCTIONS_URL = 'https://sjqjqthjvohebnjtaqaz.supabase.co/functions/v1/';
-let pubOnboardToken = null;
-let pubTeamMembers = [];
-let pubWasteStations = [];
-let pubOtherDocs = [];
-let pubStandardDocFiles = {};
 
 async function initPublicOnboardForm(token){
   pubOnboardToken = token;
@@ -4419,3 +4419,4 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
+
