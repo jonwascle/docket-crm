@@ -1214,6 +1214,17 @@ async function checkExistingSession(){
 }
 checkExistingSession();
 
+// If someone pastes a supplier onboarding link into a tab that already has
+// Docket open, the page won't necessarily do a full reload just because the
+// bit after the # changed — so also catch that case directly.
+window.addEventListener('hashchange', function(){
+  const onboardMatch = window.location.hash.match(/#supplier-onboard=([a-z0-9-]+)/i);
+  if(onboardMatch){
+    document.getElementById('app').classList.remove('active');
+    initPublicOnboardForm(onboardMatch[1]);
+  }
+});
+
 /* ---------- Views ---------- */
 function switchView(view){
   document.querySelectorAll('.nav-item[data-view]').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
@@ -4406,3 +4417,4 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
+
