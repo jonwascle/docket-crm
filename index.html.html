@@ -133,6 +133,10 @@
   .price-input:focus{border-color:var(--brass);outline:none;}
   .service-group-item{display:flex;align-items:center;gap:7px;background:var(--paper-card-alt);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:600;cursor:pointer;}
   .service-group-item input{width:16px;height:16px;}
+  .stage-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:16px;font-size:12.5px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--paper-card-alt);color:var(--slate);}
+  .stage-pill.done{background:var(--stamp-green-bg);border-color:var(--stamp-green);color:var(--stamp-green);}
+  .stage-pill.current{background:var(--brass);border-color:var(--brass);color:#1B1B1B;}
+  .script-box{background:var(--paper-card-alt);border:1px solid var(--border);border-radius:8px;padding:16px;white-space:pre-wrap;font-size:13.5px;line-height:1.6;color:var(--ink-soft);}
   .subtab.active{border-bottom-color:var(--brass) !important;color:var(--ink);}
   .subtab{color:var(--slate);}
   .panel-box{background:var(--paper-card);border:1px solid var(--border);border-radius:8px;padding:16px;}
@@ -161,6 +165,79 @@
 </style>
 </head>
 <body>
+
+<!-- ============ PUBLIC SUPPLIER ONBOARDING FORM (no login needed) ============ -->
+<div id="publicOnboardScreen" style="display:none;">
+  <div style="max-width:640px;margin:0 auto;padding:40px 20px 80px;">
+    <h1 style="font-family:'Comfortaa',sans-serif;color:var(--brass);margin-bottom:4px;">Wascle</h1>
+    <div id="publicOnboardLoading"><p>Loading your form…</p></div>
+    <div id="publicOnboardError" style="display:none;color:var(--stamp-red);"></div>
+
+    <div id="publicOnboardContent" style="display:none;">
+      <p style="font-size:15px;color:var(--ink-soft);">Completing setup for <b id="publicOnboardCompanyName"></b>. Fill in what you can below — you can come back to this same link later if you need to finish it off.</p>
+
+      <div class="onboard-section">
+        <div class="onboard-section-head"><span class="onboard-section-title">Company details</span></div>
+        <div class="field"><label>Company name</label><input id="pubName"></div>
+        <div class="field"><label>Address line 1</label><input id="pubAddr1"></div>
+        <div class="field"><label>Address line 2</label><input id="pubAddr2"></div>
+        <div class="field-row">
+          <div class="field"><label>City</label><input id="pubCity"></div>
+          <div class="field"><label>County</label><input id="pubCounty"></div>
+        </div>
+        <div class="field"><label>Postcode</label><input id="pubPostcode"></div>
+        <div class="field"><label>Waste carriers licence number</label><input id="pubLicenceNumber"></div>
+        <div class="field-row">
+          <div class="field"><label>Email</label><input id="pubEmail" type="email"></div>
+          <div class="field"><label>Phone</label><input id="pubPhone"></div>
+        </div>
+        <div class="field"><label>VAT registered?</label>
+          <select id="pubVatRegistered" onchange="document.getElementById('pubVatNumberField').style.display=this.value==='yes'?'block':'none';">
+            <option value="no">No</option><option value="yes">Yes</option>
+          </select>
+        </div>
+        <div class="field" id="pubVatNumberField" style="display:none;"><label>VAT number</label><input id="pubVatNumber"></div>
+        <div class="field"><label>Sole trader or registered company?</label>
+          <select id="pubBusinessType" onchange="document.getElementById('pubCompanyNumberField').style.display=this.value==='company'?'block':'none';">
+            <option value="sole_trader">Sole trader</option><option value="company">Registered company</option>
+          </select>
+        </div>
+        <div class="field" id="pubCompanyNumberField" style="display:none;"><label>Company number</label><input id="pubCompanyNumber"></div>
+        <div class="field"><label>SIC code (if known)</label><input id="pubSicCode"></div>
+      </div>
+
+      <div class="onboard-section">
+        <div class="onboard-section-head"><span class="onboard-section-title">Team members</span></div>
+        <p style="font-size:13px;color:var(--slate);margin-top:0;">Anyone at your company we might need to contact.</p>
+        <div id="pubTeamList"></div>
+        <button class="btn ghost small" onclick="addPubTeamRow()">+ Add a team member</button>
+      </div>
+
+      <div class="onboard-section">
+        <div class="onboard-section-head"><span class="onboard-section-title">Waste transfer station(s)</span></div>
+        <p style="font-size:13px;color:var(--slate);margin-top:0;">Where you take waste on to.</p>
+        <div id="pubWasteStationList"></div>
+        <button class="btn ghost small" onclick="addPubWasteStationRow()">+ Add a waste transfer station</button>
+      </div>
+
+      <div class="onboard-section">
+        <div class="onboard-section-head"><span class="onboard-section-title">Documents</span></div>
+        <p style="font-size:13px;color:var(--slate);margin-top:0;">Insurance and licence documents — add an expiry date if the document needs renewing.</p>
+        <div id="pubStandardDocsList"></div>
+        <div id="pubOtherDocsList" style="margin-top:14px;"></div>
+        <button class="btn ghost small" onclick="addPubOtherDocRow()">+ Add another document</button>
+      </div>
+
+      <div class="login-error" id="publicOnboardSubmitError"></div>
+      <button class="btn" id="publicOnboardSubmitBtn" onclick="submitPublicOnboardForm()" style="margin-top:10px;">Submit</button>
+    </div>
+
+    <div id="publicOnboardSuccess" style="display:none;text-align:center;padding:60px 0;">
+      <h2 style="font-family:'Comfortaa',sans-serif;">Thank you!</h2>
+      <p style="color:var(--slate);">Your details have been sent through. We'll be in touch shortly.</p>
+    </div>
+  </div>
+</div>
 
 <!-- ============ LOGIN SCREEN ============ -->
 <div id="loginScreen">
@@ -464,6 +541,7 @@
           <span class="subtab" data-sptab="team" onclick="switchSPSubtab('team')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Team members</span>
           <span class="subtab" data-sptab="wts" onclick="switchSPSubtab('wts')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Waste transfer stations</span>
           <span class="subtab" data-sptab="pricing" onclick="switchSPSubtab('pricing')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Pricing</span>
+          <span class="subtab" data-sptab="recruitment" onclick="switchSPSubtab('recruitment')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Recruitment</span>
         </div>
 
         <div id="spSubtab-details">
@@ -566,6 +644,21 @@
             <button class="btn small" onclick="downloadSPPricingPdf()" style="margin-bottom:14px;">Download pricing PDF</button>
           </div>
           <div id="spPricingListContainer" style="max-height:calc(100vh - 400px);overflow-y:auto;"></div>
+        </div>
+
+        <div id="spSubtab-recruitment" style="display:none;">
+          <div class="field">
+            <label>Recruitment stage</label>
+            <div id="spRecruitmentStageTracker" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+          </div>
+
+          <div id="spRecruitmentStageGuidance" style="margin-top:20px;"></div>
+
+          <div class="onboard-section" style="margin-top:24px;">
+            <div class="onboard-section-head"><span class="onboard-section-title">Onboarding link</span></div>
+            <p style="font-size:13px;color:var(--slate);margin-top:0;">Send this to the provider so they can fill in their own company details, team, waste transfer station, and documents — no login needed. It updates Docket directly once they submit.</p>
+            <div id="spOnboardingLinkArea"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -918,6 +1011,8 @@ let spTeamMembers = [];
 let spWasteStations = [];
 let spDefaultPricing = [];
 let spProviderPricing = [];
+let currentSPRecruitmentStage = 'prospect';
+let spOnboardingLinks = [];
 let currentSPServiceGroups = [];
 // Approximate centre point for every UK postcode AREA (the letters-only
 // part, e.g. "TR" rather than a specific district like "TR4"). Used only
@@ -976,6 +1071,41 @@ const SP_SERVICE_GROUPS = [
   { key: 'smart_skips', label: 'Smart skips', categories: ['Smart skips', 'Chargeable extras'] },
   { key: 'property_clearance', label: 'Property clearance', categories: ['Property clearance', 'Price per cubic yard'] },
   { key: 'waste_bags', label: 'Waste bags', categories: ['Price per cubic yard'] }
+];
+
+const SP_RECRUITMENT_STAGES = [
+  {
+    key: 'prospect', label: 'Prospect',
+    guidance: 'You\'ve found a possible service provider — check the Details tab has at least a company name and phone number, then call them when ready.'
+  },
+  {
+    key: 'contacted', label: 'Called them',
+    guidance: 'CALL SCRIPT (adapt as needed):\n\n"Hi, is that [Contact Name]? This is [Your Name] calling from Wascle — we\'re a waste clearance company and we work with local service providers like yourselves to help manage skip collections and waste transfer in your area.\n\nWould you be interested in working with us as one of our service providers? We\'d handle sending you the work, and pay on [payment terms] — I\'d love to send you a bit more information by email so you can have a look and see if it\'s a good fit."\n\nIf they\'re interested, get their best email address and move to the next stage to send the follow-up email.'
+  },
+  {
+    key: 'link_sent', label: 'Sent onboarding link',
+    guidance: 'FOLLOW-UP EMAIL (adapt as needed):\n\nSubject: Wascle — working together as a service provider\n\nHi [Contact Name],\n\nThanks for taking the time to speak with me today. As discussed, we\'d love to have you on board as one of our service providers.\n\nA bit about us: [add a line or two about Wascle here]\nOur website: [add website link]\n[Add a short video link here if useful]\n\nTo get you set up, please fill in your details using the secure link below — it only takes a few minutes and covers your company details, team, waste transfer station, and any documents like your insurance and waste carriers licence:\n\n[Paste the onboarding link from below into your email]\n\nOnce you\'ve done that, we\'ll be in touch to agree pricing and get you live.\n\nThanks,\n[Your name]\n\n---\nGenerate the link below, then copy it into this email before sending.'
+  },
+  {
+    key: 'reviewing', label: 'Reviewing their info',
+    guidance: 'Once they\'ve submitted the form, their answers appear directly in the Details, Team members, Waste transfer stations, and Documents tabs on this page — check those over. Chase them if anything important is still missing.'
+  },
+  {
+    key: 'pricing_setup', label: 'Pricing set up',
+    guidance: 'Head to the Pricing tab and go through their rates with them on a call — tick which services they cover, then agree and enter their rates line by line (or download the pricing PDF to send over first if that\'s easier).'
+  },
+  {
+    key: 'wts_check', label: 'Checked waste transfer station licence',
+    guidance: 'Check the waste transfer station licence they\'ve provided is genuine and current using the Environment Agency\'s public register: https://environment.data.gov.uk/public-register/view/search-waste-operations\n\nOnce you\'re satisfied it checks out, tick this stage off.'
+  },
+  {
+    key: 'wapp_entry', label: 'Entered on Wapp',
+    guidance: 'Log into Wapp and enter this provider\'s details there too, so both systems are in sync.'
+  },
+  {
+    key: 'live', label: 'Live',
+    guidance: 'This provider is fully onboarded and live. Nice work!'
+  }
 ];
 let assetsMapView = false;
 let leafletMapInstance = null;
@@ -1072,6 +1202,11 @@ function handleTaskDeepLink(){
 
 /* On page load, check if already signed in (session persists in the browser) */
 async function checkExistingSession(){
+  const onboardMatch = window.location.hash.match(/#supplier-onboard=([a-z0-9-]+)/i);
+  if(onboardMatch){
+    initPublicOnboardForm(onboardMatch[1]);
+    return;
+  }
   const { data } = await sb.auth.getSession();
   if(data && data.session && data.session.user){
     await afterLogin(data.session.user);
@@ -2300,7 +2435,7 @@ function onSPBusinessTypeChange(){
 function switchSPSubtab(tab){
   currentSPSubtab = tab;
   document.querySelectorAll('#view-serviceproviders .subtab').forEach(el=>el.classList.toggle('active', el.dataset.sptab===tab));
-  ['details','documents','team','wts','pricing'].forEach(t=>{
+  ['details','documents','team','wts','pricing','recruitment'].forEach(t=>{
     document.getElementById('spSubtab-'+t).style.display = (t===tab) ? 'block' : 'none';
   });
 }
@@ -2350,14 +2485,19 @@ async function openServiceProviderDetail(id){
   currentSPServiceGroups = row ? (row.service_groups || []) : [];
   renderSPServiceGroups();
 
+  currentSPRecruitmentStage = row ? (row.recruitment_stage || 'prospect') : 'prospect';
+  renderSPRecruitmentStageTracker();
+  renderSPRecruitmentGuidance();
+
   if(id){
     await loadSPDocuments(id);
     await loadSPTeamMembers(id);
     await loadSPWasteStations(id);
     await loadSPPricing(id);
+    await loadSPOnboardingLinks(id);
   }else{
-    spDocuments = []; spTeamMembers = []; spWasteStations = []; spProviderPricing = [];
-    renderSPDocuments(); renderSPTeamMembers(); renderSPWasteStations(); renderSPPricingList();
+    spDocuments = []; spTeamMembers = []; spWasteStations = []; spProviderPricing = []; spOnboardingLinks = [];
+    renderSPDocuments(); renderSPTeamMembers(); renderSPWasteStations(); renderSPPricingList(); renderSPOnboardingLinkArea();
   }
 }
 
@@ -2386,6 +2526,52 @@ function toggleSPCoverageMap(){
   }
 }
 
+let spAreaBoundaryCache = {}; // area letters -> GeoJSON FeatureCollection, or null if unavailable
+
+async function fetchAreaBoundary(area){
+  if(area in spAreaBoundaryCache) return spAreaBoundaryCache[area];
+  try{
+    const res = await fetch('https://raw.githubusercontent.com/missinglink/uk-postcode-polygons/master/geojson/' + encodeURIComponent(area) + '.geojson');
+    if(!res.ok){ spAreaBoundaryCache[area] = null; return null; }
+    const data = await res.json();
+    spAreaBoundaryCache[area] = data;
+    return data;
+  }catch(e){
+    spAreaBoundaryCache[area] = null;
+    return null;
+  }
+}
+
+// Used only when we don't have real boundary data for an area (currently
+// Northern Ireland and the Channel Islands/Isle of Man aren't covered by
+// the boundary source below) — a rough circle instead of no map at all.
+async function fallbackShapeForPostcode(pc, isAreaOnly){
+  if(isAreaOnly){
+    const centroid = UK_POSTCODE_AREA_CENTROIDS[pc];
+    if(!centroid) return null;
+    const radiusKm = UK_POSTCODE_AREA_RADIUS_KM[pc] || DEFAULT_AREA_RADIUS_KM;
+    const shape = L.circle([centroid[0], centroid[1]], {
+      radius: radiusKm * 1000, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.18, weight: 2
+    });
+    shape.bindPopup('<b>' + escapeHtml(pc) + '</b><br>Approximate coverage — exact boundary data isn\'t available for this area.');
+    const latPad = radiusKm / 111;
+    const lngPad = radiusKm / (111 * Math.cos(centroid[0] * Math.PI / 180));
+    return { shape, bounds: [[centroid[0]-latPad, centroid[1]-lngPad],[centroid[0]+latPad, centroid[1]+lngPad]] };
+  }
+  try{
+    const res = await fetch('https://api.postcodes.io/outcodes/' + encodeURIComponent(pc));
+    const data = await res.json();
+    if(data && data.result){
+      const shape = L.circleMarker([data.result.latitude, data.result.longitude], {
+        radius: 10, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.5, weight: 2
+      });
+      shape.bindPopup('<b>' + escapeHtml(pc) + '</b>');
+      return { shape, bounds: [[data.result.latitude, data.result.longitude],[data.result.latitude, data.result.longitude]] };
+    }
+  }catch(e){ /* nothing we can show for this one */ }
+  return null;
+}
+
 async function renderSPCoverageMap(){
   const statusEl = document.getElementById('spCoverageMapStatus');
   if(currentSPPostcodeAreas.length===0){
@@ -2394,100 +2580,80 @@ async function renderSPCoverageMap(){
     return;
   }
 
-  const needLookup = currentSPPostcodeAreas.filter(pc=>!spOutcodeCoordsCache[pc]);
-  if(needLookup.length > 0){
-    // Letters-only entries (e.g. "TR") come from the built-in area table —
-    // postcodes.io only understands full districts like "TR4".
-    const areaOnly = needLookup.filter(pc=>/^[A-Z]+$/.test(pc));
-    const withDistrict = needLookup.filter(pc=>!/^[A-Z]+$/.test(pc));
+  statusEl.textContent = 'Loading postcode boundaries…';
 
-    areaOnly.forEach(pc=>{
-      const centroid = UK_POSTCODE_AREA_CENTROIDS[pc];
-      if(centroid){
-        spOutcodeCoordsCache[pc] = { lat: centroid[0], lng: centroid[1] };
-      }
-    });
-
-    if(withDistrict.length > 0){
-      statusEl.textContent = 'Looking up ' + withDistrict.length + ' postcode area' + (withDistrict.length===1?'':'s') + '…';
-      try{
-        await Promise.all(withDistrict.map(async pc=>{
-          try{
-            const res = await fetch('https://api.postcodes.io/outcodes/' + encodeURIComponent(pc));
-            const data = await res.json();
-            if(data && data.result){
-              spOutcodeCoordsCache[pc] = { lat: data.result.latitude, lng: data.result.longitude };
-            }
-          }catch(innerErr){
-            // Leave this one out of the cache — it'll just show as "not recognised" below.
-          }
-        }));
-      }catch(e){
-        showToast('Could not look up postcode areas — check your connection and try again.', true);
-      }
-    }
-  }
-
-  const points = currentSPPostcodeAreas
-    .map(pc=>({ pc, coords: spOutcodeCoordsCache[pc] }))
-    .filter(p=>p.coords);
-  const missingCount = currentSPPostcodeAreas.length - points.length;
-  if(points.length === 0){
-    statusEl.textContent = 'Could not place any of these ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s') + ' on the map — double-check they\'re valid UK postcode areas (e.g. "TR4"), and that this device has a working internet connection.';
-  }else{
-    statusEl.textContent = 'Showing ' + points.length + ' of ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s')
-      + (missingCount > 0 ? ' (' + missingCount + ' not recognised)' : '') + '.';
-  }
+  // Both "EX" and "EX4" need the same EX.geojson file, so fetch each
+  // distinct area just once.
+  const areasNeeded = [...new Set(currentSPPostcodeAreas.map(pc=>(pc.match(/^[A-Z]+/)||[pc])[0]))];
+  await Promise.all(areasNeeded.map(area=>fetchAreaBoundary(area)));
 
   if(!spCoverageMapInstance){
     spCoverageMapInstance = L.map('spCoverageMap');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
+      attribution: '&copy; OpenStreetMap contributors. Postcode boundaries &copy; Wikipedia contributors (CC BY-SA).',
       maxZoom: 19
     }).addTo(spCoverageMapInstance);
     spCoverageMarkersLayer = L.layerGroup().addTo(spCoverageMapInstance);
   }
   spCoverageMarkersLayer.clearLayers();
 
+  let shownCount = 0;
+  const bounds = [];
+
   try{
-    if(points.length === 0){
-      spCoverageMapInstance.setView([54.5, -3], 6); // fallback: centre of UK
-      return;
+    for(const pc of currentSPPostcodeAreas){
+      const area = (pc.match(/^[A-Z]+/)||[pc])[0];
+      const isAreaOnly = pc === area;
+      const boundaryData = spAreaBoundaryCache[area];
+
+      let features = null;
+      if(boundaryData){
+        features = isAreaOnly
+          ? boundaryData.features
+          : boundaryData.features.filter(f=>f.properties && f.properties.name === pc);
+        if(features.length === 0) features = null;
+      }
+
+      if(features){
+        const layer = L.geoJSON({ type: 'FeatureCollection', features }, {
+          style: { color: '#F5B429', weight: 2, fillColor: '#F5B429', fillOpacity: isAreaOnly ? 0.15 : 0.35 }
+        });
+        layer.bindPopup('<b>' + escapeHtml(pc) + '</b>');
+        spCoverageMarkersLayer.addLayer(layer);
+        const layerBounds = layer.getBounds();
+        bounds.push(layerBounds.getSouthWest());
+        bounds.push(layerBounds.getNorthEast());
+        shownCount++;
+      }else{
+        const fallback = await fallbackShapeForPostcode(pc, isAreaOnly);
+        if(fallback){
+          spCoverageMarkersLayer.addLayer(fallback.shape);
+          bounds.push(fallback.bounds[0]);
+          bounds.push(fallback.bounds[1]);
+          shownCount++;
+        }
+      }
     }
 
-    const bounds = [];
-    points.forEach(p=>{
-      const isAreaOnly = /^[A-Z]+$/.test(p.pc);
-      if(isAreaOnly){
-        const radiusKm = UK_POSTCODE_AREA_RADIUS_KM[p.pc] || DEFAULT_AREA_RADIUS_KM;
-        const shape = L.circle([p.coords.lat, p.coords.lng], {
-          radius: radiusKm * 1000, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.18, weight: 2
-        });
-        shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b><br>Approximate coverage — roughly ' + radiusKm + 'km around this point.');
-        spCoverageMarkersLayer.addLayer(shape);
-        // Bounding box worked out by hand (roughly 111km per degree of
-        // latitude, adjusted for longitude at this latitude) rather than
-        // relying on a Leaflet method we can't be 100% sure of the shape of.
-        const latPad = radiusKm / 111;
-        const lngPad = radiusKm / (111 * Math.cos(p.coords.lat * Math.PI / 180));
-        bounds.push([p.coords.lat - latPad, p.coords.lng - lngPad]);
-        bounds.push([p.coords.lat + latPad, p.coords.lng + lngPad]);
-      }else{
-        const shape = L.circleMarker([p.coords.lat, p.coords.lng], {
-          radius: 10, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.5, weight: 2
-        });
-        shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b>');
-        spCoverageMarkersLayer.addLayer(shape);
-        bounds.push([p.coords.lat, p.coords.lng]);
-      }
-    });
-    spCoverageMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
+    if(bounds.length > 0){
+      spCoverageMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
+    }else{
+      spCoverageMapInstance.setView([54.5, -3], 6); // fallback: centre of UK
+    }
   }catch(renderErr){
     console.error('Coverage map render error', renderErr);
   }finally{
     // However this went, always nudge the map afterwards — without this,
     // it can be left showing a blank grey box even after an error.
     setTimeout(()=>spCoverageMapInstance.invalidateSize(), 50);
+  }
+
+  const missingCount = currentSPPostcodeAreas.length - shownCount;
+  if(shownCount === 0){
+    statusEl.textContent = 'Could not place any of these ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s') + ' on the map — double-check they\'re valid UK postcode areas (e.g. "TR4"), and that this device has a working internet connection.';
+  }else{
+    statusEl.textContent = 'Showing ' + shownCount + ' of ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s')
+      + (missingCount > 0 ? ' (' + missingCount + ' not recognised)' : '') + '.';
   }
 }
 
@@ -3146,6 +3312,323 @@ function downloadSPPricingPdf(){
     footerText: 'These rates are confidential and specific to ' + sp.name + '. Prices are shown in GBP, plus VAT.'
   });
   downloadPdfString(pdfString, 'Pricing - ' + sp.name.replace(/[^a-z0-9]+/gi,'-') + '.pdf');
+}
+
+/* ---- Recruitment / onboarding workflow ---- */
+function renderSPRecruitmentStageTracker(){
+  const container = document.getElementById('spRecruitmentStageTracker');
+  const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
+  container.innerHTML = SP_RECRUITMENT_STAGES.map((s,i)=>{
+    const cls = i===currentIndex ? 'current' : (i<currentIndex ? 'done' : '');
+    return '<span class="stage-pill '+cls+'" onclick="setSPRecruitmentStage(\''+s.key+'\')">'+(i<currentIndex?'✓ ':'')+escapeHtml(s.label)+'</span>';
+  }).join('');
+}
+
+async function setSPRecruitmentStage(stageKey){
+  if(!currentSPId){ showToast('Save this service provider first.', true); return; }
+  currentSPRecruitmentStage = stageKey;
+  renderSPRecruitmentStageTracker();
+  renderSPRecruitmentGuidance();
+  const { error } = await sb.from('service_providers').update({ recruitment_stage: stageKey }).eq('id', currentSPId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadServiceProviders();
+}
+
+function renderSPRecruitmentGuidance(){
+  const container = document.getElementById('spRecruitmentStageGuidance');
+  const stage = SP_RECRUITMENT_STAGES.find(s=>s.key===currentSPRecruitmentStage);
+  if(!stage){ container.innerHTML = ''; return; }
+  container.innerHTML = '<label style="display:block;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--ink-soft);">'+escapeHtml(stage.label)+'</label>'
+    + '<div class="script-box">'+escapeHtml(stage.guidance)+'</div>';
+}
+
+async function loadSPOnboardingLinks(spId){
+  const { data, error } = await sb.from('sp_onboarding_links').select('*').eq('service_provider_id', spId).order('created_at', {ascending:false});
+  if(error){ showToast('Could not load onboarding links: ' + error.message, true); return; }
+  spOnboardingLinks = data || [];
+  renderSPOnboardingLinkArea();
+}
+
+function renderSPOnboardingLinkArea(){
+  const container = document.getElementById('spOnboardingLinkArea');
+  if(!currentSPId){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then an onboarding link can be created here.</p>';
+    return;
+  }
+  let html = '<button class="btn small" onclick="generateSPOnboardingLink()" style="margin-bottom:14px;">+ Generate new link</button>';
+  if(spOnboardingLinks.length===0){
+    html += '<p style="color:var(--slate);font-size:13px;">No onboarding link generated yet.</p>';
+  }else{
+    spOnboardingLinks.forEach(l=>{
+      const url = window.location.origin + window.location.pathname + '#supplier-onboard=' + l.token;
+      html += '<div class="doc-row">';
+      html += '<div><div class="doc-row-name" style="word-break:break-all;">'+escapeHtml(url)+'</div>';
+      html += '<div class="doc-row-meta">Created '+new Date(l.created_at).toLocaleDateString('en-GB')+(l.last_submitted_at ? ' · Submitted '+new Date(l.last_submitted_at).toLocaleDateString('en-GB') : ' · Not submitted yet')+'</div></div>';
+      html += '<button class="btn ghost small" onclick="copyTextToClipboard(\''+url+'\')">Copy</button>';
+      html += '</div>';
+    });
+  }
+  container.innerHTML = html;
+}
+
+async function generateSPOnboardingLink(){
+  if(!currentSPId) return;
+  const { data, error } = await sb.from('sp_onboarding_links').insert({ service_provider_id: currentSPId }).select().single();
+  if(error){ showToast('Could not create link: ' + error.message, true); return; }
+  spOnboardingLinks.unshift(data);
+  renderSPOnboardingLinkArea();
+  const url = window.location.origin + window.location.pathname + '#supplier-onboard=' + data.token;
+  copyTextToClipboard(url);
+  showToast('Link created and copied to your clipboard.');
+}
+
+function copyTextToClipboard(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard.')).catch(()=>showToast('Could not copy — select and copy manually.', true));
+  }else{
+    showToast('Could not copy — select and copy manually.', true);
+  }
+}
+
+/* ---------- Public supplier onboarding form (no login) ---------- */
+const SP_FUNCTIONS_URL = 'https://sjqjqthjvohebnjtaqaz.supabase.co/functions/v1/';
+let pubOnboardToken = null;
+let pubTeamMembers = [];
+let pubWasteStations = [];
+let pubOtherDocs = [];
+let pubStandardDocFiles = {};
+
+async function initPublicOnboardForm(token){
+  pubOnboardToken = token;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('publicOnboardScreen').style.display = 'block';
+
+  try{
+    const res = await fetch(SP_FUNCTIONS_URL + 'sp-onboarding-submit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get', token })
+    });
+    const data = await res.json();
+    document.getElementById('publicOnboardLoading').style.display = 'none';
+    if(!res.ok || data.error){
+      document.getElementById('publicOnboardError').textContent = data.error || 'Could not load this form.';
+      document.getElementById('publicOnboardError').style.display = 'block';
+      return;
+    }
+
+    const p = data.provider;
+    document.getElementById('publicOnboardCompanyName').textContent = p.name;
+    document.getElementById('pubName').value = p.name || '';
+    document.getElementById('pubAddr1').value = p.address_line1 || '';
+    document.getElementById('pubAddr2').value = p.address_line2 || '';
+    document.getElementById('pubCity').value = p.city || '';
+    document.getElementById('pubCounty').value = p.county || '';
+    document.getElementById('pubPostcode').value = p.postcode || '';
+    document.getElementById('pubLicenceNumber').value = p.waste_carriers_licence_number || '';
+    document.getElementById('pubEmail').value = p.email || '';
+    document.getElementById('pubPhone').value = p.phone || '';
+    document.getElementById('pubVatRegistered').value = p.vat_registered ? 'yes' : 'no';
+    document.getElementById('pubVatNumberField').style.display = p.vat_registered ? 'block' : 'none';
+    document.getElementById('pubVatNumber').value = p.vat_number || '';
+    document.getElementById('pubBusinessType').value = p.business_type || 'sole_trader';
+    document.getElementById('pubCompanyNumberField').style.display = p.business_type === 'company' ? 'block' : 'none';
+    document.getElementById('pubCompanyNumber').value = p.company_number || '';
+    document.getElementById('pubSicCode').value = p.sic_code || '';
+
+    pubTeamMembers = (data.team || []).map(t=>({ name: t.name, email: t.email, phone: t.phone, existing: true }));
+    if(pubTeamMembers.length===0) pubTeamMembers.push({ name:'', email:'', phone:'' });
+    renderPubTeamList();
+
+    pubWasteStations = (data.stations || []).map(s=>({ station_name: s.station_name, licence_number: s.licence_number, address_line1: s.address_line1, address_line2: s.address_line2, city: s.city, county: s.county, postcode: s.postcode, existing: true }));
+    if(pubWasteStations.length===0) pubWasteStations.push({ station_name:'', licence_number:'', address_line1:'', address_line2:'', city:'', county:'', postcode:'' });
+    renderPubWasteStationList();
+
+    renderPubStandardDocsList(data.documents || []);
+    pubOtherDocs = [];
+    renderPubOtherDocsList();
+
+    document.getElementById('publicOnboardContent').style.display = 'block';
+  }catch(e){
+    document.getElementById('publicOnboardLoading').style.display = 'none';
+    document.getElementById('publicOnboardError').textContent = 'Something went wrong loading this form. Please check your connection and try again.';
+    document.getElementById('publicOnboardError').style.display = 'block';
+  }
+}
+
+function addPubTeamRow(){
+  pubTeamMembers.push({ name:'', email:'', phone:'' });
+  renderPubTeamList();
+}
+function removePubTeamRow(i){
+  pubTeamMembers.splice(i,1);
+  renderPubTeamList();
+}
+function renderPubTeamList(){
+  const container = document.getElementById('pubTeamList');
+  container.innerHTML = pubTeamMembers.map((m,i)=>
+    '<div class="field-row" style="align-items:flex-end;">'
+    + '<div class="field"><label>Name</label><input value="'+escapeHtml(m.name||'')+'" onchange="pubTeamMembers['+i+'].name=this.value"></div>'
+    + '<div class="field"><label>Email</label><input value="'+escapeHtml(m.email||'')+'" onchange="pubTeamMembers['+i+'].email=this.value"></div>'
+    + '<div class="field"><label>Phone</label><input value="'+escapeHtml(m.phone||'')+'" onchange="pubTeamMembers['+i+'].phone=this.value"></div>'
+    + '<button class="btn ghost small" style="margin-bottom:14px;" onclick="removePubTeamRow('+i+')">Remove</button>'
+    + '</div>'
+  ).join('');
+}
+
+function addPubWasteStationRow(){
+  pubWasteStations.push({ station_name:'', licence_number:'', address_line1:'', address_line2:'', city:'', county:'', postcode:'' });
+  renderPubWasteStationList();
+}
+function removePubWasteStationRow(i){
+  pubWasteStations.splice(i,1);
+  renderPubWasteStationList();
+}
+function renderPubWasteStationList(){
+  const container = document.getElementById('pubWasteStationList');
+  container.innerHTML = pubWasteStations.map((w,i)=>
+    '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">'
+    + '<div class="field"><label>Station name</label><input value="'+escapeHtml(w.station_name||'')+'" onchange="pubWasteStations['+i+'].station_name=this.value"></div>'
+    + '<div class="field"><label>Licence number</label><input value="'+escapeHtml(w.licence_number||'')+'" onchange="pubWasteStations['+i+'].licence_number=this.value"></div>'
+    + '<div class="field"><label>Address line 1</label><input value="'+escapeHtml(w.address_line1||'')+'" onchange="pubWasteStations['+i+'].address_line1=this.value"></div>'
+    + '<div class="field"><label>Address line 2</label><input value="'+escapeHtml(w.address_line2||'')+'" onchange="pubWasteStations['+i+'].address_line2=this.value"></div>'
+    + '<div class="field-row"><div class="field"><label>City</label><input value="'+escapeHtml(w.city||'')+'" onchange="pubWasteStations['+i+'].city=this.value"></div>'
+    + '<div class="field"><label>County</label><input value="'+escapeHtml(w.county||'')+'" onchange="pubWasteStations['+i+'].county=this.value"></div></div>'
+    + '<div class="field"><label>Postcode</label><input value="'+escapeHtml(w.postcode||'')+'" onchange="pubWasteStations['+i+'].postcode=this.value"></div>'
+    + '<button class="btn ghost small" onclick="removePubWasteStationRow('+i+')">Remove this station</button>'
+    + '</div>'
+  ).join('');
+}
+
+function renderPubStandardDocsList(existingDocs){
+  const container = document.getElementById('pubStandardDocsList');
+  container.innerHTML = SP_STANDARD_DOCUMENT_TYPES.map(type=>{
+    const existing = existingDocs.find(d=>d.document_type===type.key);
+    let html = '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">';
+    html += '<label style="font-weight:700;display:block;margin-bottom:8px;">'+escapeHtml(type.label)+'</label>';
+    if(existing){
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);margin:0 0 8px;">Already on file'+(existing.expiry_date ? ' — expires '+new Date(existing.expiry_date).toLocaleDateString('en-GB') : '')+'. Upload a new one below to replace it.</p>';
+    }
+    if(type.requiresFile){
+      html += '<div class="field"><label>File</label><input type="file" id="pubStdDocFile_'+type.key+'" onchange="handlePubDocFile(this, \''+type.key+'\')"></div>';
+    }else{
+      html += '<div class="field"><label>'+escapeHtml(type.valueLabel||'Value')+'</label><input id="pubStdDocValue_'+type.key+'" value="'+escapeHtml((existing&&existing.text_value)||'')+'"></div>';
+    }
+    html += '<div class="field"><label>Expiry date (optional)</label><input type="date" id="pubStdDocExpiry_'+type.key+'" value="'+((existing&&existing.expiry_date)||'')+'"></div>';
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+function handlePubDocFile(input, key){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    pubStandardDocFiles[key] = { fileName: file.name, mimeType: file.type, fileBase64: e.target.result.split(',')[1] };
+  };
+  reader.readAsDataURL(file);
+}
+
+function addPubOtherDocRow(){
+  pubOtherDocs.push({ name:'', expiryDate:'', file:null });
+  renderPubOtherDocsList();
+}
+function removePubOtherDocRow(i){
+  pubOtherDocs.splice(i,1);
+  renderPubOtherDocsList();
+}
+function handlePubOtherDocFile(input, i){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    pubOtherDocs[i].file = { fileName: file.name, mimeType: file.type, fileBase64: e.target.result.split(',')[1] };
+  };
+  reader.readAsDataURL(file);
+}
+function renderPubOtherDocsList(){
+  const container = document.getElementById('pubOtherDocsList');
+  container.innerHTML = pubOtherDocs.map((d,i)=>
+    '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">'
+    + '<div class="field"><label>Document name</label><input value="'+escapeHtml(d.name||'')+'" onchange="pubOtherDocs['+i+'].name=this.value" placeholder="e.g. Photo, Vehicle log book"></div>'
+    + '<div class="field"><label>File</label><input type="file" onchange="handlePubOtherDocFile(this, '+i+')"></div>'
+    + '<div class="field"><label>Expiry date (optional)</label><input type="date" onchange="pubOtherDocs['+i+'].expiryDate=this.value"></div>'
+    + '<button class="btn ghost small" onclick="removePubOtherDocRow('+i+')">Remove</button>'
+    + '</div>'
+  ).join('');
+}
+
+async function submitPublicOnboardForm(){
+  const errEl = document.getElementById('publicOnboardSubmitError');
+  errEl.style.display = 'none';
+  const name = document.getElementById('pubName').value.trim();
+  if(!name){ errEl.textContent = 'Company name is required.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('publicOnboardSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  const company = {
+    name,
+    address_line1: document.getElementById('pubAddr1').value.trim(),
+    address_line2: document.getElementById('pubAddr2').value.trim(),
+    city: document.getElementById('pubCity').value.trim(),
+    county: document.getElementById('pubCounty').value.trim(),
+    postcode: document.getElementById('pubPostcode').value.trim(),
+    waste_carriers_licence_number: document.getElementById('pubLicenceNumber').value.trim(),
+    email: document.getElementById('pubEmail').value.trim(),
+    phone: document.getElementById('pubPhone').value.trim(),
+    vat_registered: document.getElementById('pubVatRegistered').value === 'yes',
+    vat_number: document.getElementById('pubVatNumber').value.trim(),
+    business_type: document.getElementById('pubBusinessType').value,
+    company_number: document.getElementById('pubCompanyNumber').value.trim(),
+    sic_code: document.getElementById('pubSicCode').value.trim()
+  };
+
+  const teamMembers = pubTeamMembers.filter(m=>m.name && m.name.trim());
+
+  const wasteStations = pubWasteStations.filter(w=>w.station_name && w.station_name.trim());
+
+  const documents = [];
+  SP_STANDARD_DOCUMENT_TYPES.forEach(type=>{
+    const expiry = document.getElementById('pubStdDocExpiry_'+type.key).value || null;
+    if(type.requiresFile){
+      const fileData = pubStandardDocFiles[type.key];
+      if(fileData){
+        documents.push({ name: type.label, documentType: type.key, expiryDate: expiry, ...fileData });
+      }
+    }else{
+      const value = document.getElementById('pubStdDocValue_'+type.key).value.trim();
+      if(value){
+        documents.push({ name: type.label, documentType: type.key, expiryDate: expiry, textValue: value });
+      }
+    }
+  });
+  pubOtherDocs.forEach(d=>{
+    if(d.file && d.name){
+      documents.push({ name: d.name, expiryDate: d.expiryDate || null, ...d.file });
+    }
+  });
+
+  try{
+    const res = await fetch(SP_FUNCTIONS_URL + 'sp-onboarding-submit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'submit', token: pubOnboardToken, company, teamMembers, wasteStations, documents })
+    });
+    const data = await res.json();
+    if(!res.ok || data.error){
+      errEl.textContent = data.error || 'Could not submit — please try again.';
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Submit';
+      return;
+    }
+    document.getElementById('publicOnboardContent').style.display = 'none';
+    document.getElementById('publicOnboardSuccess').style.display = 'block';
+  }catch(e){
+    errEl.textContent = 'Something went wrong — please check your connection and try again.';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Submit';
+  }
 }
 
 /* ---------- Tasks ---------- */
