@@ -988,7 +988,9 @@
 const SUPABASE_URL = 'https://sjqjqthjvohebnjtaqaz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_ZHS5biIkvk0lC5eS6SfYgw_ZfymL9Lz';
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { detectSessionInUrl: false }
+});
 
 let currentUser = null;
 let currentProfile = null;
@@ -4417,4 +4419,3 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
-
