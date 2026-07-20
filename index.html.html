@@ -2728,6 +2728,8 @@ async function saveServiceProvider(){
   await loadSPDocuments(id);
   await loadSPTeamMembers(id);
   await loadSPWasteStations(id);
+  await loadSPPricing(id);
+  await loadSPOnboardingLinks(id);
 }
 
 async function deleteServiceProvider(){
