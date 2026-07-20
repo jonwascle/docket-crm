@@ -133,7 +133,7 @@
   .price-input:focus{border-color:var(--brass);outline:none;}
   .service-group-item{display:flex;align-items:center;gap:7px;background:var(--paper-card-alt);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:600;cursor:pointer;}
   .service-group-item input{width:16px;height:16px;}
-  .stage-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:16px;font-size:12.5px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--paper-card-alt);color:var(--slate);}
+  .stage-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:16px;font-size:12.5px;font-weight:700;border:1.5px solid var(--border);background:var(--paper-card-alt);color:var(--slate);}
   .stage-pill.done{background:var(--stamp-green-bg);border-color:var(--stamp-green);color:var(--stamp-green);}
   .stage-pill.current{background:var(--brass);border-color:var(--brass);color:#1B1B1B;}
   .script-box{background:var(--paper-card-alt);border:1px solid var(--border);border-radius:8px;padding:16px;white-space:pre-wrap;font-size:13.5px;line-height:1.6;color:var(--ink-soft);}
@@ -3322,7 +3322,7 @@ function renderSPRecruitmentStageTracker(){
   const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
   container.innerHTML = SP_RECRUITMENT_STAGES.map((s,i)=>{
     const cls = i===currentIndex ? 'current' : (i<currentIndex ? 'done' : '');
-    return '<span class="stage-pill '+cls+'" onclick="setSPRecruitmentStage(\''+s.key+'\')">'+(i<currentIndex?'✓ ':'')+escapeHtml(s.label)+'</span>';
+    return '<span class="stage-pill '+cls+'">'+(i<currentIndex?'✓ ':'')+escapeHtml(s.label)+'</span>';
   }).join('');
 }
 
@@ -3338,10 +3338,33 @@ async function setSPRecruitmentStage(stageKey){
 
 function renderSPRecruitmentGuidance(){
   const container = document.getElementById('spRecruitmentStageGuidance');
-  const stage = SP_RECRUITMENT_STAGES.find(s=>s.key===currentSPRecruitmentStage);
+  const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
+  const stage = SP_RECRUITMENT_STAGES[currentIndex];
   if(!stage){ container.innerHTML = ''; return; }
-  container.innerHTML = '<label style="display:block;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--ink-soft);">'+escapeHtml(stage.label)+'</label>'
-    + '<div class="script-box">'+escapeHtml(stage.guidance)+'</div>';
+  const isLastStage = currentIndex === SP_RECRUITMENT_STAGES.length - 1;
+  let html = '<label style="display:block;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--ink-soft);">'+escapeHtml(stage.label)+'</label>';
+  html += '<div class="script-box">'+escapeHtml(stage.guidance)+'</div>';
+  html += '<div style="display:flex;gap:8px;margin-top:12px;">';
+  if(currentIndex > 0){
+    html += '<button class="btn ghost small" onclick="moveSPRecruitmentStageBack()">← Move back a stage</button>';
+  }
+  if(!isLastStage){
+    html += '<button class="btn small" onclick="advanceSPRecruitmentStage()">Mark this stage complete →</button>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+async function advanceSPRecruitmentStage(){
+  const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
+  if(currentIndex < 0 || currentIndex >= SP_RECRUITMENT_STAGES.length - 1) return;
+  await setSPRecruitmentStage(SP_RECRUITMENT_STAGES[currentIndex + 1].key);
+}
+
+async function moveSPRecruitmentStageBack(){
+  const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
+  if(currentIndex <= 0) return;
+  await setSPRecruitmentStage(SP_RECRUITMENT_STAGES[currentIndex - 1].key);
 }
 
 async function loadSPOnboardingLinks(spId){
