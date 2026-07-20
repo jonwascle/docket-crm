@@ -2449,37 +2449,46 @@ async function renderSPCoverageMap(){
   }
   spCoverageMarkersLayer.clearLayers();
 
-  if(points.length === 0){
-    spCoverageMapInstance.setView([54.5, -3], 6); // fallback: centre of UK
-    setTimeout(()=>spCoverageMapInstance.invalidateSize(), 50);
-    return;
-  }
-
-  const bounds = [];
-  points.forEach(p=>{
-    const isAreaOnly = /^[A-Z]+$/.test(p.pc);
-    let shape;
-    if(isAreaOnly){
-      const radiusKm = UK_POSTCODE_AREA_RADIUS_KM[p.pc] || DEFAULT_AREA_RADIUS_KM;
-      shape = L.circle([p.coords.lat, p.coords.lng], {
-        radius: radiusKm * 1000, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.18, weight: 2
-      });
-      shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b><br>Approximate coverage — roughly ' + radiusKm + 'km around this point.');
-      spCoverageMarkersLayer.addLayer(shape);
-      const circleBounds = shape.getBounds();
-      bounds.push(circleBounds.getSouthWest());
-      bounds.push(circleBounds.getNorthEast());
-    }else{
-      shape = L.circleMarker([p.coords.lat, p.coords.lng], {
-        radius: 10, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.5, weight: 2
-      });
-      shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b>');
-      spCoverageMarkersLayer.addLayer(shape);
-      bounds.push([p.coords.lat, p.coords.lng]);
+  try{
+    if(points.length === 0){
+      spCoverageMapInstance.setView([54.5, -3], 6); // fallback: centre of UK
+      return;
     }
-  });
-  spCoverageMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
-  setTimeout(()=>spCoverageMapInstance.invalidateSize(), 50);
+
+    const bounds = [];
+    points.forEach(p=>{
+      const isAreaOnly = /^[A-Z]+$/.test(p.pc);
+      if(isAreaOnly){
+        const radiusKm = UK_POSTCODE_AREA_RADIUS_KM[p.pc] || DEFAULT_AREA_RADIUS_KM;
+        const shape = L.circle([p.coords.lat, p.coords.lng], {
+          radius: radiusKm * 1000, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.18, weight: 2
+        });
+        shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b><br>Approximate coverage — roughly ' + radiusKm + 'km around this point.');
+        spCoverageMarkersLayer.addLayer(shape);
+        // Bounding box worked out by hand (roughly 111km per degree of
+        // latitude, adjusted for longitude at this latitude) rather than
+        // relying on a Leaflet method we can't be 100% sure of the shape of.
+        const latPad = radiusKm / 111;
+        const lngPad = radiusKm / (111 * Math.cos(p.coords.lat * Math.PI / 180));
+        bounds.push([p.coords.lat - latPad, p.coords.lng - lngPad]);
+        bounds.push([p.coords.lat + latPad, p.coords.lng + lngPad]);
+      }else{
+        const shape = L.circleMarker([p.coords.lat, p.coords.lng], {
+          radius: 10, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.5, weight: 2
+        });
+        shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b>');
+        spCoverageMarkersLayer.addLayer(shape);
+        bounds.push([p.coords.lat, p.coords.lng]);
+      }
+    });
+    spCoverageMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
+  }catch(renderErr){
+    console.error('Coverage map render error', renderErr);
+  }finally{
+    // However this went, always nudge the map afterwards — without this,
+    // it can be left showing a blank grey box even after an error.
+    setTimeout(()=>spCoverageMapInstance.invalidateSize(), 50);
+  }
 }
 
 function addSPPostcodeArea(){
