@@ -1229,18 +1229,39 @@ async function afterLogin(user){
   await loadTasks();
   await loadServiceProviders();
   renderContacts();
-  handleTaskDeepLink();
+  const wasTaskLink = handleTaskDeepLink();
+  if(!wasTaskLink) await restoreAppViewFromHash();
 }
 
 function handleTaskDeepLink(){
   const match = window.location.hash.match(/#task=([a-z0-9-]+)/i);
-  if(!match) return;
+  if(!match) return false;
   const taskId = match[1];
   const task = tasks.find(t=>t.id===taskId);
-  if(!task){ showToast('Could not find that task.', true); return; }
+  if(!task){ showToast('Could not find that task.', true); return true; }
   switchView('tasks');
   switchTaskSubview(task.status === 'done' ? 'done' : 'open');
   openTaskModal(taskId);
+  return true;
+}
+
+async function restoreAppViewFromHash(){
+  const hash = window.location.hash;
+  if(!hash || hash === '#') return;
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const view = params.get('view');
+  if(!view) return;
+  const validViews = ['contacts','organisations','pipeline','quotes','onboarding','assets','serviceproviders','tasks','team'];
+  if(!validViews.includes(view)) return;
+  switchView(view);
+  if(view === 'serviceproviders'){
+    const spId = params.get('sp');
+    const subtab = params.get('subtab');
+    if(spId && serviceProviders.find(s=>s.id===spId)){
+      await openServiceProviderDetail(spId);
+      if(subtab) switchSPSubtab(subtab);
+    }
+  }
 }
 
 /* On page load, check if already signed in (session persists in the browser) */
@@ -1269,6 +1290,15 @@ window.addEventListener('hashchange', function(){
 });
 
 /* ---------- Views ---------- */
+function updateAppHash(params){
+  const hashParams = new URLSearchParams();
+  Object.keys(params).forEach(k=>{ if(params[k]) hashParams.set(k, params[k]); });
+  const newHash = '#' + hashParams.toString();
+  if(window.location.hash !== newHash){
+    history.replaceState(null, '', window.location.pathname + window.location.search + newHash);
+  }
+}
+
 function switchView(view){
   document.querySelectorAll('.nav-item[data-view]').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
   document.getElementById('view-contacts').classList.toggle('active', view==='contacts');
@@ -1288,6 +1318,7 @@ function switchView(view){
   if(view==='assets') renderAssets();
   if(view==='serviceproviders') showServiceProvidersList();
   if(view==='tasks') renderTasks();
+  if(view!=='serviceproviders') updateAppHash({ view });
 }
 
 function closeModal(id){ document.getElementById(id).classList.remove('active'); }
@@ -2457,6 +2488,7 @@ function showServiceProvidersList(){
   document.getElementById('spDetailMode').style.display = 'none';
   currentSPId = null;
   renderServiceProvidersList();
+  updateAppHash({ view:'serviceproviders' });
 }
 
 function renderServiceProvidersList(){
@@ -2487,12 +2519,16 @@ function onSPBusinessTypeChange(){
   document.getElementById('spCompanyNumberField').style.display = document.getElementById('spBusinessType').value==='company' ? 'block' : 'none';
 }
 
-function switchSPSubtab(tab){
+async function switchSPSubtab(tab){
+  if(currentSPSubtab === 'details' && tab !== 'details' && currentSPId){
+    await saveServiceProvider(true);
+  }
   currentSPSubtab = tab;
   document.querySelectorAll('#view-serviceproviders .subtab').forEach(el=>el.classList.toggle('active', el.dataset.sptab===tab));
   ['details','documents','team','wts','pricing','recruitment'].forEach(t=>{
     document.getElementById('spSubtab-'+t).style.display = (t===tab) ? 'block' : 'none';
   });
+  updateAppHash({ view:'serviceproviders', sp: currentSPId || '', subtab: tab });
 }
 
 async function openServiceProviderDetail(id){
@@ -2736,9 +2772,9 @@ function removeSPPostcodeArea(index){
   }
 }
 
-async function saveServiceProvider(){
+async function saveServiceProvider(silent){
   const name = document.getElementById('spName').value.trim();
-  if(!name){ showToast('Company name is required.', true); return; }
+  if(!name){ if(!silent) showToast('Company name is required.', true); return; }
   const payload = {
     name,
     address_line1: document.getElementById('spAddr1').value.trim(),
@@ -2781,7 +2817,7 @@ async function saveServiceProvider(){
   await loadServiceProviders();
   document.getElementById('spDetailTitle').textContent = name;
   document.getElementById('spDeleteBtn').style.display = 'inline-flex';
-  showToast('Service provider saved.');
+  if(!silent) showToast('Service provider saved.');
   await loadSPDocuments(id);
   await loadSPTeamMembers(id);
   await loadSPWasteStations(id);
