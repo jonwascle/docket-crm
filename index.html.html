@@ -923,6 +923,22 @@ let currentSPServiceGroups = [];
 // part, e.g. "TR" rather than a specific district like "TR4"). Used only
 // when someone enters a coverage area with no number — postcodes.io itself
 // doesn't support looking those up directly, only full districts.
+// Very approximate "how far does this whole area roughly spread" in km from
+// its centre point — used to draw a coverage circle sized closer to reality,
+// rather than the same small dot for a tiny London postcode area and a huge
+// Highlands one. Not precise boundaries, just a reasonable visual estimate.
+const UK_POSTCODE_AREA_RADIUS_KM = {
+  // Small, dense, inner-city areas
+  E:8, EC:5, N:8, NW:8, SE:8, SW:8, W:8, WC:5,
+  B:10, M:10, L:10, G:10, EH:10, BS:10, LS:10, S:10, NE:10, BT:12,
+  // Larger, sparser regional and rural areas — sized generously, since a
+  // whole county (like Cornwall) stretches much further than it first looks
+  TR:45, EX:42, PL:32, TQ:28, DT:28, TA:32, SP:28, DG:38, KA:28,
+  LD:32, SY:32, LL:32, HR:28, NR:32, LN:32, YO:38, CA:38, LA:28, DL:28,
+  IV:60, KW:45, ZE:35, HS:50, PA:50, PH:50, AB:42, TD:32, FK:28
+};
+const DEFAULT_AREA_RADIUS_KM = 18;
+
 const UK_POSTCODE_AREA_CENTROIDS = {
   AB:[57.15,-2.11], AL:[51.75,-0.34], B:[52.48,-1.90], BA:[51.28,-2.44], BB:[53.75,-2.48],
   BD:[53.79,-1.75], BH:[50.75,-1.87], BL:[53.58,-2.43], BN:[50.82,-0.14], BR:[51.40,0.02],
@@ -2441,12 +2457,26 @@ async function renderSPCoverageMap(){
 
   const bounds = [];
   points.forEach(p=>{
-    const circle = L.circleMarker([p.coords.lat, p.coords.lng], {
-      radius: 14, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.35, weight: 2
-    });
-    circle.bindPopup('<b>' + escapeHtml(p.pc) + '</b>');
-    spCoverageMarkersLayer.addLayer(circle);
-    bounds.push([p.coords.lat, p.coords.lng]);
+    const isAreaOnly = /^[A-Z]+$/.test(p.pc);
+    let shape;
+    if(isAreaOnly){
+      const radiusKm = UK_POSTCODE_AREA_RADIUS_KM[p.pc] || DEFAULT_AREA_RADIUS_KM;
+      shape = L.circle([p.coords.lat, p.coords.lng], {
+        radius: radiusKm * 1000, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.18, weight: 2
+      });
+      shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b><br>Approximate coverage — roughly ' + radiusKm + 'km around this point.');
+      spCoverageMarkersLayer.addLayer(shape);
+      const circleBounds = shape.getBounds();
+      bounds.push(circleBounds.getSouthWest());
+      bounds.push(circleBounds.getNorthEast());
+    }else{
+      shape = L.circleMarker([p.coords.lat, p.coords.lng], {
+        radius: 10, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.5, weight: 2
+      });
+      shape.bindPopup('<b>' + escapeHtml(p.pc) + '</b>');
+      spCoverageMarkersLayer.addLayer(shape);
+      bounds.push([p.coords.lat, p.coords.lng]);
+    }
   });
   spCoverageMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
   setTimeout(()=>spCoverageMapInstance.invalidateSize(), 50);
@@ -3859,3 +3889,4 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
+
