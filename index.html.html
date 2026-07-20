@@ -175,21 +175,22 @@
 
     <div id="publicOnboardContent" style="display:none;">
       <p style="font-size:15px;color:var(--ink-soft);">Completing setup for <b id="publicOnboardCompanyName"></b>. Fill in what you can below — you can come back to this same link later if you need to finish it off.</p>
+      <p style="font-size:12.5px;color:var(--slate);margin-top:-10px;">Fields marked * are required.</p>
 
       <div class="onboard-section">
         <div class="onboard-section-head"><span class="onboard-section-title">Company details</span></div>
-        <div class="field"><label>Company name</label><input id="pubName"></div>
-        <div class="field"><label>Address line 1</label><input id="pubAddr1"></div>
+        <div class="field"><label>Company name *</label><input id="pubName"></div>
+        <div class="field"><label>Address line 1 *</label><input id="pubAddr1"></div>
         <div class="field"><label>Address line 2</label><input id="pubAddr2"></div>
         <div class="field-row">
-          <div class="field"><label>City</label><input id="pubCity"></div>
-          <div class="field"><label>County</label><input id="pubCounty"></div>
+          <div class="field"><label>City *</label><input id="pubCity"></div>
+          <div class="field"><label>County *</label><input id="pubCounty"></div>
         </div>
-        <div class="field"><label>Postcode</label><input id="pubPostcode"></div>
-        <div class="field"><label>Waste carriers licence number</label><input id="pubLicenceNumber"></div>
+        <div class="field"><label>Postcode *</label><input id="pubPostcode"></div>
+        <div class="field"><label>Waste carriers licence number *</label><input id="pubLicenceNumber"></div>
         <div class="field-row">
-          <div class="field"><label>Email</label><input id="pubEmail" type="email"></div>
-          <div class="field"><label>Phone</label><input id="pubPhone"></div>
+          <div class="field"><label>Email *</label><input id="pubEmail" type="email"></div>
+          <div class="field"><label>Phone *</label><input id="pubPhone"></div>
         </div>
         <div class="field"><label>VAT registered?</label>
           <select id="pubVatRegistered" onchange="document.getElementById('pubVatNumberField').style.display=this.value==='yes'?'block':'none';">
@@ -208,7 +209,7 @@
 
       <div class="onboard-section">
         <div class="onboard-section-head"><span class="onboard-section-title">Team members</span></div>
-        <p style="font-size:13px;color:var(--slate);margin-top:0;">Anyone at your company we might need to contact.</p>
+        <p style="font-size:13px;color:var(--slate);margin-top:0;">Enter anyone in your company who will be collecting waste.</p>
         <div id="pubTeamList"></div>
         <button class="btn ghost small" onclick="addPubTeamRow()">+ Add a team member</button>
       </div>
@@ -3505,14 +3506,15 @@ function removePubTeamRow(i){
 }
 function renderPubTeamList(){
   const container = document.getElementById('pubTeamList');
-  container.innerHTML = pubTeamMembers.map((m,i)=>
-    '<div class="field-row" style="align-items:flex-end;">'
-    + '<div class="field"><label>Name</label><input value="'+escapeHtml(m.name||'')+'" onchange="pubTeamMembers['+i+'].name=this.value"></div>'
-    + '<div class="field"><label>Email</label><input value="'+escapeHtml(m.email||'')+'" onchange="pubTeamMembers['+i+'].email=this.value"></div>'
-    + '<div class="field"><label>Phone</label><input value="'+escapeHtml(m.phone||'')+'" onchange="pubTeamMembers['+i+'].phone=this.value"></div>'
+  container.innerHTML = pubTeamMembers.map((m,i)=>{
+    const req = i===0 ? ' *' : '';
+    return '<div class="field-row" style="align-items:flex-end;">'
+    + '<div class="field"><label>Name'+req+'</label><input value="'+escapeHtml(m.name||'')+'" onchange="pubTeamMembers['+i+'].name=this.value"></div>'
+    + '<div class="field"><label>Email'+req+'</label><input value="'+escapeHtml(m.email||'')+'" onchange="pubTeamMembers['+i+'].email=this.value"></div>'
+    + '<div class="field"><label>Phone'+req+'</label><input value="'+escapeHtml(m.phone||'')+'" onchange="pubTeamMembers['+i+'].phone=this.value"></div>'
     + '<button class="btn ghost small" style="margin-bottom:14px;" onclick="removePubTeamRow('+i+')">Remove</button>'
-    + '</div>'
-  ).join('');
+    + '</div>';
+  }).join('');
 }
 
 function addPubWasteStationRow(){
@@ -3527,13 +3529,13 @@ function renderPubWasteStationList(){
   const container = document.getElementById('pubWasteStationList');
   container.innerHTML = pubWasteStations.map((w,i)=>
     '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">'
-    + '<div class="field"><label>Station name</label><input value="'+escapeHtml(w.station_name||'')+'" onchange="pubWasteStations['+i+'].station_name=this.value"></div>'
+    + '<div class="field"><label>Station name *</label><input value="'+escapeHtml(w.station_name||'')+'" onchange="pubWasteStations['+i+'].station_name=this.value"></div>'
     + '<div class="field"><label>Licence number</label><input value="'+escapeHtml(w.licence_number||'')+'" onchange="pubWasteStations['+i+'].licence_number=this.value"></div>'
-    + '<div class="field"><label>Address line 1</label><input value="'+escapeHtml(w.address_line1||'')+'" onchange="pubWasteStations['+i+'].address_line1=this.value"></div>'
+    + '<div class="field"><label>Address line 1 *</label><input value="'+escapeHtml(w.address_line1||'')+'" onchange="pubWasteStations['+i+'].address_line1=this.value"></div>'
     + '<div class="field"><label>Address line 2</label><input value="'+escapeHtml(w.address_line2||'')+'" onchange="pubWasteStations['+i+'].address_line2=this.value"></div>'
     + '<div class="field-row"><div class="field"><label>City</label><input value="'+escapeHtml(w.city||'')+'" onchange="pubWasteStations['+i+'].city=this.value"></div>'
     + '<div class="field"><label>County</label><input value="'+escapeHtml(w.county||'')+'" onchange="pubWasteStations['+i+'].county=this.value"></div></div>'
-    + '<div class="field"><label>Postcode</label><input value="'+escapeHtml(w.postcode||'')+'" onchange="pubWasteStations['+i+'].postcode=this.value"></div>'
+    + '<div class="field"><label>Postcode *</label><input value="'+escapeHtml(w.postcode||'')+'" onchange="pubWasteStations['+i+'].postcode=this.value"></div>'
     + '<button class="btn ghost small" onclick="removePubWasteStationRow('+i+')">Remove this station</button>'
     + '</div>'
   ).join('');
@@ -3601,8 +3603,47 @@ function renderPubOtherDocsList(){
 async function submitPublicOnboardForm(){
   const errEl = document.getElementById('publicOnboardSubmitError');
   errEl.style.display = 'none';
+
+  function fail(msg, scrollToId){
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+    errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if(scrollToId) document.getElementById(scrollToId).focus();
+  }
+
   const name = document.getElementById('pubName').value.trim();
-  if(!name){ errEl.textContent = 'Company name is required.'; errEl.style.display = 'block'; return; }
+  if(!name){ fail('Company name is required.', 'pubName'); return; }
+  if(!document.getElementById('pubAddr1').value.trim()){ fail('Address line 1 is required.', 'pubAddr1'); return; }
+  if(!document.getElementById('pubCity').value.trim()){ fail('City is required.', 'pubCity'); return; }
+  if(!document.getElementById('pubCounty').value.trim()){ fail('County is required.', 'pubCounty'); return; }
+  if(!document.getElementById('pubPostcode').value.trim()){ fail('Postcode is required.', 'pubPostcode'); return; }
+  if(!document.getElementById('pubLicenceNumber').value.trim()){ fail('Waste carriers licence number is required.', 'pubLicenceNumber'); return; }
+  if(!document.getElementById('pubEmail').value.trim()){ fail('Email is required.', 'pubEmail'); return; }
+  if(!document.getElementById('pubPhone').value.trim()){ fail('Phone is required.', 'pubPhone'); return; }
+  if(document.getElementById('pubVatRegistered').value === 'yes' && !document.getElementById('pubVatNumber').value.trim()){
+    fail('You said you\'re VAT registered — please enter your VAT number.', 'pubVatNumber'); return;
+  }
+  if(document.getElementById('pubBusinessType').value === 'company' && !document.getElementById('pubCompanyNumber').value.trim()){
+    fail('You said you\'re a registered company — please enter your company number.', 'pubCompanyNumber'); return;
+  }
+
+  const firstTeamMember = pubTeamMembers[0] || {};
+  if(!firstTeamMember.name || !firstTeamMember.name.trim() || !firstTeamMember.email || !firstTeamMember.email.trim() || !firstTeamMember.phone || !firstTeamMember.phone.trim()){
+    fail('Please enter at least one team member with a name, email, and phone number.');
+    return;
+  }
+
+  const validStations = pubWasteStations.filter(w=>w.station_name && w.station_name.trim());
+  if(validStations.length === 0){
+    fail('Please add at least one waste transfer station.');
+    return;
+  }
+  for(const w of validStations){
+    if(!w.address_line1 || !w.address_line1.trim() || !w.postcode || !w.postcode.trim()){
+      fail('Each waste transfer station needs a station name, address, and postcode.');
+      return;
+    }
+  }
 
   const btn = document.getElementById('publicOnboardSubmitBtn');
   btn.disabled = true; btn.textContent = 'Submitting…';
@@ -4421,4 +4462,3 @@ function quoteRefLabel(q){
 </body>
 </html>
 
-  
