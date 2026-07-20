@@ -187,23 +187,24 @@
           <div class="field"><label>County *</label><input id="pubCounty"></div>
         </div>
         <div class="field"><label>Postcode *</label><input id="pubPostcode"></div>
-        <div class="field"><label>Waste carriers licence number *</label><input id="pubLicenceNumber"></div>
         <div class="field-row">
           <div class="field"><label>Email *</label><input id="pubEmail" type="email"></div>
           <div class="field"><label>Phone *</label><input id="pubPhone"></div>
         </div>
-        <div class="field"><label>VAT registered?</label>
+        <div class="field"><label>VAT registered? *</label>
           <select id="pubVatRegistered" onchange="document.getElementById('pubVatNumberField').style.display=this.value==='yes'?'block':'none';">
+            <option value="">-- Please select --</option>
             <option value="no">No</option><option value="yes">Yes</option>
           </select>
         </div>
-        <div class="field" id="pubVatNumberField" style="display:none;"><label>VAT number</label><input id="pubVatNumber"></div>
-        <div class="field"><label>Sole trader or registered company?</label>
+        <div class="field" id="pubVatNumberField" style="display:none;"><label>VAT number *</label><input id="pubVatNumber"></div>
+        <div class="field"><label>Sole trader or registered company? *</label>
           <select id="pubBusinessType" onchange="document.getElementById('pubCompanyNumberField').style.display=this.value==='company'?'block':'none';">
+            <option value="">-- Please select --</option>
             <option value="sole_trader">Sole trader</option><option value="company">Registered company</option>
           </select>
         </div>
-        <div class="field" id="pubCompanyNumberField" style="display:none;"><label>Company number</label><input id="pubCompanyNumber"></div>
+        <div class="field" id="pubCompanyNumberField" style="display:none;"><label>Company number *</label><input id="pubCompanyNumber"></div>
         <div class="field"><label>SIC code (if known)</label><input id="pubSicCode"></div>
       </div>
 
@@ -3465,13 +3466,12 @@ async function initPublicOnboardForm(token){
     document.getElementById('pubCity').value = p.city || '';
     document.getElementById('pubCounty').value = p.county || '';
     document.getElementById('pubPostcode').value = p.postcode || '';
-    document.getElementById('pubLicenceNumber').value = p.waste_carriers_licence_number || '';
     document.getElementById('pubEmail').value = p.email || '';
     document.getElementById('pubPhone').value = p.phone || '';
-    document.getElementById('pubVatRegistered').value = p.vat_registered ? 'yes' : 'no';
+    document.getElementById('pubVatRegistered').value = p.vat_registered === true ? 'yes' : (p.vat_registered === false ? 'no' : '');
     document.getElementById('pubVatNumberField').style.display = p.vat_registered ? 'block' : 'none';
     document.getElementById('pubVatNumber').value = p.vat_number || '';
-    document.getElementById('pubBusinessType').value = p.business_type || 'sole_trader';
+    document.getElementById('pubBusinessType').value = p.business_type || '';
     document.getElementById('pubCompanyNumberField').style.display = p.business_type === 'company' ? 'block' : 'none';
     document.getElementById('pubCompanyNumber').value = p.company_number || '';
     document.getElementById('pubSicCode').value = p.sic_code || '';
@@ -3546,14 +3546,14 @@ function renderPubStandardDocsList(existingDocs){
   container.innerHTML = SP_STANDARD_DOCUMENT_TYPES.map(type=>{
     const existing = existingDocs.find(d=>d.document_type===type.key);
     let html = '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">';
-    html += '<label style="font-weight:700;display:block;margin-bottom:8px;">'+escapeHtml(type.label)+'</label>';
+    html += '<label style="font-weight:700;display:block;margin-bottom:8px;">'+escapeHtml(type.label)+(type.key==='waste_carriers_licence' ? ' *' : '')+'</label>';
     if(existing){
       html += '<p style="font-size:12.5px;color:var(--stamp-green);margin:0 0 8px;">Already on file'+(existing.expiry_date ? ' — expires '+new Date(existing.expiry_date).toLocaleDateString('en-GB') : '')+'. Upload a new one below to replace it.</p>';
     }
     if(type.requiresFile){
       html += '<div class="field"><label>File</label><input type="file" id="pubStdDocFile_'+type.key+'" onchange="handlePubDocFile(this, \''+type.key+'\')"></div>';
     }else{
-      html += '<div class="field"><label>'+escapeHtml(type.valueLabel||'Value')+'</label><input id="pubStdDocValue_'+type.key+'" value="'+escapeHtml((existing&&existing.text_value)||'')+'"></div>';
+      html += '<div class="field"><label>'+escapeHtml(type.valueLabel||'Value')+(type.key==='waste_carriers_licence' ? ' *' : '')+'</label><input id="pubStdDocValue_'+type.key+'" value="'+escapeHtml((existing&&existing.text_value)||'')+'"></div>';
     }
     html += '<div class="field"><label>Expiry date (optional)</label><input type="date" id="pubStdDocExpiry_'+type.key+'" value="'+((existing&&existing.expiry_date)||'')+'"></div>';
     html += '</div>';
@@ -3617,14 +3617,24 @@ async function submitPublicOnboardForm(){
   if(!document.getElementById('pubCity').value.trim()){ fail('City is required.', 'pubCity'); return; }
   if(!document.getElementById('pubCounty').value.trim()){ fail('County is required.', 'pubCounty'); return; }
   if(!document.getElementById('pubPostcode').value.trim()){ fail('Postcode is required.', 'pubPostcode'); return; }
-  if(!document.getElementById('pubLicenceNumber').value.trim()){ fail('Waste carriers licence number is required.', 'pubLicenceNumber'); return; }
   if(!document.getElementById('pubEmail').value.trim()){ fail('Email is required.', 'pubEmail'); return; }
   if(!document.getElementById('pubPhone').value.trim()){ fail('Phone is required.', 'pubPhone'); return; }
+  if(!document.getElementById('pubVatRegistered').value){
+    fail('Please answer whether you\'re VAT registered.', 'pubVatRegistered'); return;
+  }
   if(document.getElementById('pubVatRegistered').value === 'yes' && !document.getElementById('pubVatNumber').value.trim()){
     fail('You said you\'re VAT registered — please enter your VAT number.', 'pubVatNumber'); return;
   }
+  if(!document.getElementById('pubBusinessType').value){
+    fail('Please answer whether you\'re a sole trader or a registered company.', 'pubBusinessType'); return;
+  }
   if(document.getElementById('pubBusinessType').value === 'company' && !document.getElementById('pubCompanyNumber').value.trim()){
     fail('You said you\'re a registered company — please enter your company number.', 'pubCompanyNumber'); return;
+  }
+  const licenceValueEl = document.getElementById('pubStdDocValue_waste_carriers_licence');
+  if(!licenceValueEl || !licenceValueEl.value.trim()){
+    fail('Waste carriers licence number is required — see the Documents section below.');
+    return;
   }
 
   const firstTeamMember = pubTeamMembers[0] || {};
@@ -3655,7 +3665,6 @@ async function submitPublicOnboardForm(){
     city: document.getElementById('pubCity').value.trim(),
     county: document.getElementById('pubCounty').value.trim(),
     postcode: document.getElementById('pubPostcode').value.trim(),
-    waste_carriers_licence_number: document.getElementById('pubLicenceNumber').value.trim(),
     email: document.getElementById('pubEmail').value.trim(),
     phone: document.getElementById('pubPhone').value.trim(),
     vat_registered: document.getElementById('pubVatRegistered').value === 'yes',
@@ -4461,4 +4470,3 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
-
