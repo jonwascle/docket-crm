@@ -212,13 +212,13 @@
       <div class="onboard-section">
         <div class="onboard-section-head"><span class="onboard-section-title">Finance details</span></div>
         <div class="field-row">
-          <div class="field"><label>Invoice recipient name</label><input id="pubInvoiceRecipientName"></div>
-          <div class="field"><label>Invoice recipient email</label><input id="pubInvoiceRecipientEmail" type="email"></div>
+          <div class="field"><label>Invoice recipient name *</label><input id="pubInvoiceRecipientName"></div>
+          <div class="field"><label>Invoice recipient email *</label><input id="pubInvoiceRecipientEmail" type="email"></div>
         </div>
-        <div class="field"><label>Bank account name</label><input id="pubBankAccountName"></div>
+        <div class="field"><label>Bank account name *</label><input id="pubBankAccountName"></div>
         <div class="field-row">
-          <div class="field"><label>Bank account number</label><input id="pubBankAccountNumber"></div>
-          <div class="field"><label>Sort code</label><input id="pubBankSortCode" placeholder="00-00-00"></div>
+          <div class="field"><label>Bank account number *</label><input id="pubBankAccountNumber"></div>
+          <div class="field"><label>Sort code *</label><input id="pubBankSortCode" placeholder="00-00-00"></div>
         </div>
       </div>
 
@@ -255,12 +255,12 @@
       </div>
 
       <div class="login-error" id="publicOnboardSubmitError"></div>
-      <p style="font-size:12.5px;color:var(--slate);margin-top:8px;">Not got everything to hand? Use "Save and continue later" below — we'll keep what you've entered, and you can pick up right where you left off just by opening this same link again.</p>
+      <p style="font-size:12.5px;color:var(--slate);margin-top:8px;">Not got everything to hand? Use "Submit what I have so far" below — we'll take what you've entered, and you can pick up right where you left off just by opening this same link again.</p>
     </div>
 
     <div id="publicOnboardFooterBar" style="display:none;position:fixed;left:0;right:0;bottom:0;background:var(--paper-card);border-top:1px solid var(--border);box-shadow:0 -4px 14px rgba(0,0,0,0.06);padding:12px 20px;z-index:50;">
       <div style="max-width:640px;margin:0 auto;display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn ghost" id="publicOnboardSaveBtn" onclick="savePublicOnboardForm(false)">Save and continue later</button>
+        <button class="btn ghost" id="publicOnboardSaveBtn" onclick="savePublicOnboardForm(false)">Submit what I have so far</button>
         <button class="btn" id="publicOnboardSubmitBtn" onclick="savePublicOnboardForm(true)">Submit</button>
       </div>
     </div>
@@ -3673,6 +3673,16 @@ function renderPubOtherDocsList(){
   ).join('');
 }
 
+function resumePublicOnboardForm(){
+  document.getElementById('publicOnboardSuccess').style.display = 'none';
+  document.getElementById('publicOnboardContent').style.display = 'block';
+  document.getElementById('publicOnboardFooterBar').style.display = 'block';
+  const saveBtn = document.getElementById('publicOnboardSaveBtn');
+  const submitBtn = document.getElementById('publicOnboardSubmitBtn');
+  saveBtn.disabled = false; saveBtn.textContent = 'Submit what I have so far';
+  submitBtn.disabled = false; submitBtn.textContent = 'Submit';
+}
+
 async function savePublicOnboardForm(isFinal){
   const errEl = document.getElementById('publicOnboardSubmitError');
   errEl.style.display = 'none';
@@ -3714,6 +3724,11 @@ async function savePublicOnboardForm(isFinal){
       fail('Waste carriers licence number is required — see the Documents section below.');
       return;
     }
+    if(!document.getElementById('pubInvoiceRecipientName').value.trim()){ fail('Invoice recipient name is required.', 'pubInvoiceRecipientName'); return; }
+    if(!document.getElementById('pubInvoiceRecipientEmail').value.trim()){ fail('Invoice recipient email is required.', 'pubInvoiceRecipientEmail'); return; }
+    if(!document.getElementById('pubBankAccountName').value.trim()){ fail('Bank account name is required.', 'pubBankAccountName'); return; }
+    if(!document.getElementById('pubBankAccountNumber').value.trim()){ fail('Bank account number is required.', 'pubBankAccountNumber'); return; }
+    if(!document.getElementById('pubBankSortCode').value.trim()){ fail('Sort code is required.', 'pubBankSortCode'); return; }
 
     const firstTeamMember = pubTeamMembers[0] || {};
     if(!firstTeamMember.name || !firstTeamMember.name.trim() || !firstTeamMember.email || !firstTeamMember.email.trim() || !firstTeamMember.phone || !firstTeamMember.phone.trim()){
@@ -3741,7 +3756,7 @@ async function savePublicOnboardForm(isFinal){
   saveBtn.disabled = true; submitBtn.disabled = true;
   const activeBtn = isFinal ? submitBtn : saveBtn;
   const activeBtnOriginalText = activeBtn.textContent;
-  activeBtn.textContent = isFinal ? 'Submitting…' : 'Saving…';
+  activeBtn.textContent = isFinal ? 'Submitting…' : 'Sending…';
 
   const company = {
     name,
@@ -3809,8 +3824,9 @@ async function savePublicOnboardForm(isFinal){
     }else{
       document.getElementById('publicOnboardContent').style.display = 'none';
       document.getElementById('publicOnboardFooterBar').style.display = 'none';
-      document.getElementById('publicOnboardSuccess').innerHTML = '<h2 style="font-family:\'Comfortaa\',sans-serif;">Saved!</h2>'
-        + '<p style="color:var(--slate);">We\'ve saved what you\'ve entered so far. Whenever you\'re ready to add more or finish up, just follow this same link again — everything you\'ve already told us will still be there.</p>';
+      document.getElementById('publicOnboardSuccess').innerHTML = '<h2 style="font-family:\'Comfortaa\',sans-serif;">Thanks — sent through!</h2>'
+        + '<p style="color:var(--slate);">We\'ve received what you\'ve entered so far. Whenever you\'re ready to add more or finish up, just follow this same link again — everything you\'ve already told us will still be there.</p>'
+        + '<button class="btn ghost" onclick="resumePublicOnboardForm()" style="margin-top:10px;">Continue editing now</button>';
       document.getElementById('publicOnboardSuccess').style.display = 'block';
     }
   }catch(e){
