@@ -2350,19 +2350,17 @@ async function renderSPCoverageMap(){
   if(needLookup.length > 0){
     statusEl.textContent = 'Looking up ' + needLookup.length + ' postcode area' + (needLookup.length===1?'':'s') + '…';
     try{
-      const res = await fetch('https://api.postcodes.io/outcodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ outcodes: needLookup })
-      });
-      const data = await res.json();
-      if(data && data.result){
-        data.result.forEach(entry=>{
-          if(entry && entry.result){
-            spOutcodeCoordsCache[entry.result.outcode] = { lat: entry.result.latitude, lng: entry.result.longitude };
+      await Promise.all(needLookup.map(async pc=>{
+        try{
+          const res = await fetch('https://api.postcodes.io/outcodes/' + encodeURIComponent(pc));
+          const data = await res.json();
+          if(data && data.result){
+            spOutcodeCoordsCache[pc] = { lat: data.result.latitude, lng: data.result.longitude };
           }
-        });
-      }
+        }catch(innerErr){
+          // Leave this one out of the cache — it'll just show as "not recognised" below.
+        }
+      }));
     }catch(e){
       showToast('Could not look up postcode areas — check your connection and try again.', true);
     }
@@ -2372,8 +2370,12 @@ async function renderSPCoverageMap(){
     .map(pc=>({ pc, coords: spOutcodeCoordsCache[pc] }))
     .filter(p=>p.coords);
   const missingCount = currentSPPostcodeAreas.length - points.length;
-  statusEl.textContent = 'Showing ' + points.length + ' of ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s')
-    + (missingCount > 0 ? ' (' + missingCount + ' not recognised)' : '') + '.';
+  if(points.length === 0){
+    statusEl.textContent = 'Could not place any of these ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s') + ' on the map — double-check they\'re valid UK postcode areas (e.g. "TR4"), and that this device has a working internet connection.';
+  }else{
+    statusEl.textContent = 'Showing ' + points.length + ' of ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s')
+      + (missingCount > 0 ? ' (' + missingCount + ' not recognised)' : '') + '.';
+  }
 
   if(!spCoverageMapInstance){
     spCoverageMapInstance = L.map('spCoverageMap');
@@ -3811,3 +3813,4 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
+
