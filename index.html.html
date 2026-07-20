@@ -3417,13 +3417,14 @@ function renderSPOnboardingLinkArea(){
 
 async function generateSPOnboardingLink(){
   if(!currentSPId) return;
+  await sb.from('sp_onboarding_links').delete().eq('service_provider_id', currentSPId);
   const { data, error } = await sb.from('sp_onboarding_links').insert({ service_provider_id: currentSPId }).select().single();
   if(error){ showToast('Could not create link: ' + error.message, true); return; }
-  spOnboardingLinks.unshift(data);
+  spOnboardingLinks = [data];
   renderSPOnboardingLinkArea();
   const url = window.location.origin + window.location.pathname + '#supplier-onboard=' + data.token;
   copyTextToClipboard(url);
-  showToast('Link created and copied to your clipboard.');
+  showToast('New link created (any previous link for this provider no longer works) and copied to your clipboard.');
 }
 
 function copyTextToClipboard(text){
@@ -4420,3 +4421,4 @@ function quoteRefLabel(q){
 </body>
 </html>
 
+  
