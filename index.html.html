@@ -519,6 +519,11 @@
               <button class="btn ghost small" onclick="addSPPostcodeArea()">+ Add</button>
             </div>
             <div id="spPostcodeAreaList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"></div>
+            <button class="btn ghost small" style="margin-top:10px;" onclick="toggleSPCoverageMap()" id="spCoverageMapToggleBtn">Show coverage map</button>
+            <div id="spCoverageMapWrap" style="display:none;margin-top:10px;">
+              <p id="spCoverageMapStatus" style="font-size:12px;color:var(--slate);margin:0 0 8px;"></p>
+              <div id="spCoverageMap" style="height:340px;border-radius:8px;border:1px solid var(--border);"></div>
+            </div>
           </div>
 
           <div class="field"><label>Notes</label><textarea id="spNotes"></textarea></div>
@@ -927,6 +932,9 @@ const SP_SERVICE_GROUPS = [
 let assetsMapView = false;
 let leafletMapInstance = null;
 let leafletMarkersLayer = null;
+let spCoverageMapInstance = null;
+let spCoverageMarkersLayer = null;
+let spOutcodeCoordsCache = {};
 const DEAL_STAGES = [
   {key:'lead', label:'Lead', color:'var(--slate)', bg:'var(--paper-card-alt)',
     description:'A new potential customer or opportunity that hasn\'t been contacted yet.'},
@@ -1000,6 +1008,18 @@ async function afterLogin(user){
   await loadTasks();
   await loadServiceProviders();
   renderContacts();
+  handleTaskDeepLink();
+}
+
+function handleTaskDeepLink(){
+  const match = window.location.hash.match(/#task=([a-z0-9-]+)/i);
+  if(!match) return;
+  const taskId = match[1];
+  const task = tasks.find(t=>t.id===taskId);
+  if(!task){ showToast('Could not find that task.', true); return; }
+  switchView('tasks');
+  switchTaskSubview(task.status === 'done' ? 'done' : 'open');
+  openTaskModal(taskId);
 }
 
 /* On page load, check if already signed in (session persists in the browser) */
@@ -2272,6 +2292,8 @@ async function openServiceProviderDetail(id){
     currentSPPostcodeAreas = (data||[]).map(p=>p.postcode_area);
   }
   renderSPPostcodeAreas();
+  document.getElementById('spCoverageMapWrap').style.display = 'none';
+  document.getElementById('spCoverageMapToggleBtn').textContent = 'Show coverage map';
 
   document.getElementById('spListMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'block';
@@ -2302,6 +2324,86 @@ function renderSPPostcodeAreas(){
   ).join('');
 }
 
+function toggleSPCoverageMap(){
+  const wrap = document.getElementById('spCoverageMapWrap');
+  const btn = document.getElementById('spCoverageMapToggleBtn');
+  const showing = wrap.style.display !== 'none';
+  if(showing){
+    wrap.style.display = 'none';
+    btn.textContent = 'Show coverage map';
+  }else{
+    wrap.style.display = 'block';
+    btn.textContent = 'Hide coverage map';
+    renderSPCoverageMap();
+  }
+}
+
+async function renderSPCoverageMap(){
+  const statusEl = document.getElementById('spCoverageMapStatus');
+  if(currentSPPostcodeAreas.length===0){
+    statusEl.textContent = 'No postcode areas added yet — add some above to see them on a map.';
+    if(spCoverageMarkersLayer) spCoverageMarkersLayer.clearLayers();
+    return;
+  }
+
+  const needLookup = currentSPPostcodeAreas.filter(pc=>!spOutcodeCoordsCache[pc]);
+  if(needLookup.length > 0){
+    statusEl.textContent = 'Looking up ' + needLookup.length + ' postcode area' + (needLookup.length===1?'':'s') + '…';
+    try{
+      const res = await fetch('https://api.postcodes.io/outcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outcodes: needLookup })
+      });
+      const data = await res.json();
+      if(data && data.result){
+        data.result.forEach(entry=>{
+          if(entry && entry.result){
+            spOutcodeCoordsCache[entry.result.outcode] = { lat: entry.result.latitude, lng: entry.result.longitude };
+          }
+        });
+      }
+    }catch(e){
+      showToast('Could not look up postcode areas — check your connection and try again.', true);
+    }
+  }
+
+  const points = currentSPPostcodeAreas
+    .map(pc=>({ pc, coords: spOutcodeCoordsCache[pc] }))
+    .filter(p=>p.coords);
+  const missingCount = currentSPPostcodeAreas.length - points.length;
+  statusEl.textContent = 'Showing ' + points.length + ' of ' + currentSPPostcodeAreas.length + ' postcode area' + (currentSPPostcodeAreas.length===1?'':'s')
+    + (missingCount > 0 ? ' (' + missingCount + ' not recognised)' : '') + '.';
+
+  if(!spCoverageMapInstance){
+    spCoverageMapInstance = L.map('spCoverageMap');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(spCoverageMapInstance);
+    spCoverageMarkersLayer = L.layerGroup().addTo(spCoverageMapInstance);
+  }
+  spCoverageMarkersLayer.clearLayers();
+
+  if(points.length === 0){
+    spCoverageMapInstance.setView([54.5, -3], 6); // fallback: centre of UK
+    setTimeout(()=>spCoverageMapInstance.invalidateSize(), 50);
+    return;
+  }
+
+  const bounds = [];
+  points.forEach(p=>{
+    const circle = L.circleMarker([p.coords.lat, p.coords.lng], {
+      radius: 14, color: '#F5B429', fillColor: '#F5B429', fillOpacity: 0.35, weight: 2
+    });
+    circle.bindPopup('<b>' + escapeHtml(p.pc) + '</b>');
+    spCoverageMarkersLayer.addLayer(circle);
+    bounds.push([p.coords.lat, p.coords.lng]);
+  });
+  spCoverageMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
+  setTimeout(()=>spCoverageMapInstance.invalidateSize(), 50);
+}
+
 function addSPPostcodeArea(){
   const input = document.getElementById('spPostcodeAreaInput');
   let val = input.value.trim().toUpperCase();
@@ -2312,11 +2414,17 @@ function addSPPostcodeArea(){
   }
   input.value = '';
   renderSPPostcodeAreas();
+  if(document.getElementById('spCoverageMapWrap').style.display !== 'none'){
+    renderSPCoverageMap();
+  }
 }
 
 function removeSPPostcodeArea(index){
   currentSPPostcodeAreas.splice(index, 1);
   renderSPPostcodeAreas();
+  if(document.getElementById('spCoverageMapWrap').style.display !== 'none'){
+    renderSPCoverageMap();
+  }
 }
 
 async function saveServiceProvider(){
@@ -3083,19 +3191,25 @@ async function saveTask(){
   const id = document.getElementById('taskId').value;
   const title = document.getElementById('taskTitleField').value.trim();
   if(!title){ showToast('Task title is required.', true); return; }
+  const newAssignee = document.getElementById('taskAssignedTo').value || null;
   const payload = {
     title,
     notes: document.getElementById('taskNotes').value.trim(),
     organisation_id: document.getElementById('taskOrganisationId').value || null,
-    assigned_to: document.getElementById('taskAssignedTo').value || null
+    assigned_to: newAssignee
   };
-  let error;
+  let error, taskId = id, assigneeChanged = false;
   if(id){
+    const existing = tasks.find(t=>t.id===id);
+    assigneeChanged = !!newAssignee && (!existing || existing.assigned_to !== newAssignee);
     ({ error } = await sb.from('tasks').update(payload).eq('id', id));
   }else{
     payload.status = 'todo';
     payload.created_by = currentUser.id;
-    ({ error } = await sb.from('tasks').insert(payload));
+    const res = await sb.from('tasks').insert(payload).select().single();
+    error = res.error;
+    if(res.data) taskId = res.data.id;
+    assigneeChanged = !!newAssignee;
   }
   if(error){ showToast('Could not save task: ' + error.message, true); return; }
   closeModal('taskModalOverlay');
@@ -3103,6 +3217,26 @@ async function saveTask(){
   renderTasks();
   refreshOrgTasksSectionIfVisible();
   showToast('Task saved.');
+  if(assigneeChanged && taskId){
+    notifyTaskAssignment(taskId);
+  }
+}
+
+async function notifyTaskAssignment(taskId){
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session) return;
+    await fetch('https://sjqjqthjvohebnjtaqaz.supabase.co/functions/v1/send-task-reminders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ taskId })
+    });
+  }catch(e){
+    // Email sending is best-effort — this shouldn't block using the app,
+    // and it won't work at all until an email provider is configured on
+    // the send-task-reminders function.
+    console.error('Could not send task assignment email', e);
+  }
 }
 
 async function deleteTask(){
