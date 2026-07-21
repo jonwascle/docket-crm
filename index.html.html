@@ -518,7 +518,7 @@
             <div class="field"><label>Website</label><input id="obWebsite" oninput="updateOnboardingProgress()"></div>
           </div>
           <div class="field"><label>Builders merchant (optional)</label>
-            <select id="obBuildersMerchantId"><option value="">— None —</option></select>
+            <select id="obBuildersMerchantId" onchange="updateOnboardingProgress()"><option value="">— Select builders merchant —</option></select>
             <p style="font-size:12px;color:var(--slate);margin:4px 0 0;">If this customer came via a builders merchant, link them here.</p>
           </div>
         </div>
@@ -1834,23 +1834,24 @@ function camelToOrgRow(o){
 }
 
 const ONBOARDING_FIELDS = [
-  'name','addressLine1','addressLine2','city','county','postcode','website',
+  'name','addressLine1','addressLine2','city','county','postcode','website','buildersMerchantId',
   'contactFirstName','contactLastName','contactJobTitle','contactPhone','contactEmail',
   'financeFirstName','financeLastName','financeJobTitle','financePhone','financeEmail'
 ];
 const REQUIRED_FOR_ONBOARDING_LIVE = [
-  'name','addressLine1','city','county','postcode','website',
+  'name','addressLine1','city','county','postcode','website','buildersMerchantId',
   'contactFirstName','contactLastName','contactJobTitle','contactPhone','contactEmail',
   'financeFirstName','financeLastName','financeJobTitle','financePhone','financeEmail'
 ];
 const ONBOARDING_FIELD_INPUT_IDS = {
-  name:'obCustomerName', addressLine1:'obAddr1', city:'obCity', county:'obCounty', postcode:'obPostcode', website:'obWebsite',
+  name:'obCustomerName', addressLine1:'obAddr1', city:'obCity', county:'obCounty', postcode:'obPostcode', website:'obWebsite', buildersMerchantId:'obBuildersMerchantId',
   contactFirstName:'obContactFirst', contactLastName:'obContactLast', contactJobTitle:'obContactJob', contactPhone:'obContactPhone', contactEmail:'obContactEmail',
   financeFirstName:'obFinanceFirst', financeLastName:'obFinanceLast', financeJobTitle:'obFinanceJob', financePhone:'obFinancePhone', financeEmail:'obFinanceEmail'
 };
 const ONBOARDING_FIELD_LABELS = {
   name:'Organisation detail — Customer name', addressLine1:'Organisation detail — Address line 1', city:'Organisation detail — City',
   county:'Organisation detail — County', postcode:'Organisation detail — Postcode', website:'Organisation detail — Website',
+  buildersMerchantId:'Organisation detail — Builders merchant',
   contactFirstName:'Contact detail — First name', contactLastName:'Contact detail — Last name', contactJobTitle:'Contact detail — Job position',
   contactPhone:'Contact detail — Telephone', contactEmail:'Contact detail — Email',
   financeFirstName:'Finance detail — First name', financeLastName:'Finance detail — Last name', financeJobTitle:'Finance detail — Job position',
@@ -2147,7 +2148,7 @@ function openOnboardingDetail(orgId){
   document.getElementById('obWebsite').value = org.website || '';
 
   const bmSel = document.getElementById('obBuildersMerchantId');
-  bmSel.innerHTML = '<option value="">— None —</option>' +
+  bmSel.innerHTML = '<option value="">— Select builders merchant —</option>' +
     organisations.filter(o=>o.is_builders_merchant && o.id!==orgId).slice().sort((a,b)=>a.name.localeCompare(b.name))
       .map(o=>'<option value="'+o.id+'">'+escapeHtml(o.name)+'</option>').join('');
   bmSel.value = '';
@@ -2196,6 +2197,7 @@ function collectOnboardingFormValues(){
     county: document.getElementById('obCounty').value.trim(),
     postcode: document.getElementById('obPostcode').value.trim(),
     website: document.getElementById('obWebsite').value.trim(),
+    buildersMerchantId: document.getElementById('obBuildersMerchantId').value,
     contactFirstName: document.getElementById('obContactFirst').value.trim(),
     contactLastName: document.getElementById('obContactLast').value.trim(),
     contactJobTitle: document.getElementById('obContactJob').value.trim(),
