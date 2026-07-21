@@ -350,6 +350,23 @@
         </div>
 
         <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Builders merchant</span></div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;">
+            <input type="checkbox" id="orgIsBuildersMerchant" onchange="toggleOrgBuildersMerchant()"> This organisation is a builders merchant
+          </label>
+          <div id="orgBuildersMerchantLinksArea" style="margin-top:14px;display:none;">
+            <p style="font-size:13px;color:var(--slate);margin-top:0;">Which customers do they supply our smart skips to? (e.g. a housing association ordering through them)</p>
+            <div style="display:flex;gap:8px;">
+              <input id="orgLinkedCustomerSearch" list="orgLinkedCustomerOptions" placeholder="Search organisation name..." style="flex:1;">
+              <datalist id="orgLinkedCustomerOptions"></datalist>
+              <button class="btn ghost small" onclick="addOrgLink()">+ Add</button>
+            </div>
+            <div id="orgLinkedCustomersList" style="margin-top:10px;"></div>
+          </div>
+          <div id="orgSuppliedViaArea" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="onboard-section">
           <div class="onboard-section-head"><span class="onboard-section-title">Contacts</span><button class="btn ghost small" onclick="addContactForCurrentOrg()">+ Add contact</button></div>
           <div id="orgDetailContacts"></div>
         </div>
@@ -1065,6 +1082,7 @@ let currentUser = null;
 let currentProfile = null;
 let contacts = [];
 let organisations = [];
+let organisationLinks = [];
 let deals = [];
 let assets = [];
 let quotes = [];
@@ -1262,6 +1280,7 @@ async function afterLogin(user){
     await loadNotificationEmails();
   }
   await loadOrganisations();
+  await loadOrganisationLinks();
   await loadContacts();
   await loadDeals();
   await loadAssets();
@@ -1376,6 +1395,12 @@ async function loadOrganisations(){
   const { data, error } = await sb.from('organisations').select('*').order('name');
   if(error){ showToast('Could not load organisations: ' + error.message, true); return; }
   organisations = data || [];
+}
+
+async function loadOrganisationLinks(){
+  const { data, error } = await sb.from('organisation_links').select('*');
+  if(error){ showToast('Could not load organisation links: ' + error.message, true); return; }
+  organisationLinks = data || [];
 }
 
 /* ---------- Contacts CRUD ---------- */
@@ -1707,6 +1732,71 @@ function showOnboardingList(){
 }
 
 /* ---------- Organisations page (browse orgs, see contacts + tasks together) ---------- */
+async function toggleOrgBuildersMerchant(){
+  if(!currentOrgPageOrgId) return;
+  const checked = document.getElementById('orgIsBuildersMerchant').checked;
+  const { error } = await sb.from('organisations').update({ is_builders_merchant: checked }).eq('id', currentOrgPageOrgId);
+  if(error){ showToast('Could not save: ' + error.message, true); document.getElementById('orgIsBuildersMerchant').checked = !checked; return; }
+  await loadOrganisations();
+  document.getElementById('orgBuildersMerchantLinksArea').style.display = checked ? 'block' : 'none';
+  if(checked) renderOrgLinkedCustomersList();
+}
+
+function renderOrgLinkedCustomersList(){
+  const container = document.getElementById('orgLinkedCustomersList');
+  const links = organisationLinks.filter(l=>l.builders_merchant_id===currentOrgPageOrgId);
+  if(links.length===0){
+    container.innerHTML = '<p style="color:var(--slate);font-size:12.5px;">No customers linked yet.</p>';
+    return;
+  }
+  container.innerHTML = links.map(l=>{
+    const customer = organisations.find(o=>o.id===l.linked_organisation_id);
+    return '<div class="doc-row">'
+      + '<div class="doc-row-name" style="cursor:pointer;" onclick="openOrganisationDetail(\''+l.linked_organisation_id+'\')">'+escapeHtml(customer ? customer.name : 'Unknown organisation')+'</div>'
+      + '<button class="btn ghost small" onclick="removeOrgLink(\''+l.id+'\')">Remove</button>'
+      + '</div>';
+  }).join('');
+}
+
+async function addOrgLink(){
+  if(!currentOrgPageOrgId) return;
+  const input = document.getElementById('orgLinkedCustomerSearch');
+  const name = input.value.trim();
+  if(!name){ return; }
+  const match = organisations.find(o=>o.name.toLowerCase()===name.toLowerCase() && o.id!==currentOrgPageOrgId);
+  if(!match){ showToast('Could not find an organisation with that exact name.', true); return; }
+  const alreadyLinked = organisationLinks.some(l=>l.builders_merchant_id===currentOrgPageOrgId && l.linked_organisation_id===match.id);
+  if(alreadyLinked){ showToast('Already linked.', true); return; }
+  const { error } = await sb.from('organisation_links').insert({ builders_merchant_id: currentOrgPageOrgId, linked_organisation_id: match.id });
+  if(error){ showToast('Could not link: ' + error.message, true); return; }
+  input.value = '';
+  await loadOrganisationLinks();
+  renderOrgLinkedCustomersList();
+  showToast('Linked.');
+}
+
+async function removeOrgLink(linkId){
+  const { error } = await sb.from('organisation_links').delete().eq('id', linkId);
+  if(error){ showToast('Could not remove: ' + error.message, true); return; }
+  await loadOrganisationLinks();
+  renderOrgLinkedCustomersList();
+  renderOrgSuppliedVia();
+}
+
+function renderOrgSuppliedVia(){
+  const container = document.getElementById('orgSuppliedViaArea');
+  const links = organisationLinks.filter(l=>l.linked_organisation_id===currentOrgPageOrgId);
+  if(links.length===0){
+    container.innerHTML = '';
+    return;
+  }
+  const names = links.map(l=>{
+    const merchant = organisations.find(o=>o.id===l.builders_merchant_id);
+    return '<span style="cursor:pointer;color:var(--brass);font-weight:600;" onclick="openOrganisationDetail(\''+l.builders_merchant_id+'\')">'+escapeHtml(merchant ? merchant.name : 'Unknown organisation')+'</span>';
+  });
+  container.innerHTML = '<p style="font-size:12.5px;color:var(--slate);margin:0;">Supplied via: '+names.join(', ')+'</p>';
+}
+
 function showOrganisationsList(){
   document.getElementById('organisationsListMode').style.display = 'block';
   document.getElementById('organisationDetailMode').style.display = 'none';
@@ -1769,6 +1859,15 @@ function openOrganisationDetail(orgId){
   document.getElementById('orgDetailLiveBadge').style.display = row.onboarding_status==='live' ? 'inline-block' : 'none';
   document.getElementById('orgDetailSub').textContent = row.onboarding_status==='live' ? 'Live customer' : 'Currently onboarding';
   document.getElementById('deleteOrgBtn').style.display = currentProfile.role === 'admin' ? 'inline-flex' : 'none';
+
+  document.getElementById('orgIsBuildersMerchant').checked = !!row.is_builders_merchant;
+  document.getElementById('orgBuildersMerchantLinksArea').style.display = row.is_builders_merchant ? 'block' : 'none';
+  document.getElementById('orgLinkedCustomerOptions').innerHTML = organisations
+    .filter(o=>o.id!==orgId)
+    .map(o=>'<option value="'+escapeHtml(o.name)+'">').join('');
+  document.getElementById('orgLinkedCustomerSearch').value = '';
+  renderOrgLinkedCustomersList();
+  renderOrgSuppliedVia();
 
   const summaryParts = [];
   const address = [row.address_line1, row.address_line2, row.city, row.county, row.postcode].filter(Boolean).join(', ');
