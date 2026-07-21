@@ -379,6 +379,21 @@
         </div>
 
         <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Contacts</span><button class="btn ghost small" onclick="addContactForCurrentOrg()">+ Add contact</button></div>
+          <div id="orgDetailContacts"></div>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Quotes</span><button class="btn ghost small" onclick="addQuoteForCurrentOrg()">+ New quote</button></div>
+          <div id="orgDetailQuotes"></div>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Tasks</span><button class="btn ghost small" onclick="addTaskForCurrentOrg()">+ Add task</button></div>
+          <div id="orgDetailTasks"></div>
+        </div>
+
+        <div class="onboard-section">
           <div class="onboard-section-head"><span class="onboard-section-title">Builders merchant</span></div>
           <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;">
             <input type="checkbox" id="orgIsBuildersMerchant" onchange="toggleOrgBuildersMerchant()"> This organisation is a builders merchant
@@ -393,21 +408,6 @@
             <div id="orgLinkedCustomersList" style="margin-top:10px;"></div>
           </div>
           <div id="orgSuppliedViaArea" style="margin-top:12px;"></div>
-        </div>
-
-        <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Contacts</span><button class="btn ghost small" onclick="addContactForCurrentOrg()">+ Add contact</button></div>
-          <div id="orgDetailContacts"></div>
-        </div>
-
-        <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Quotes</span><button class="btn ghost small" onclick="addQuoteForCurrentOrg()">+ New quote</button></div>
-          <div id="orgDetailQuotes"></div>
-        </div>
-
-        <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Tasks</span><button class="btn ghost small" onclick="addTaskForCurrentOrg()">+ Add task</button></div>
-          <div id="orgDetailTasks"></div>
         </div>
       </div>
     </div>
