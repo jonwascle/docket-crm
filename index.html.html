@@ -517,6 +517,10 @@
             <div class="field"><label>Postcode</label><input id="obPostcode" oninput="updateOnboardingProgress()"></div>
             <div class="field"><label>Website</label><input id="obWebsite" oninput="updateOnboardingProgress()"></div>
           </div>
+          <div class="field"><label>Builders merchant (optional)</label>
+            <select id="obBuildersMerchantId"><option value="">— None —</option></select>
+            <p style="font-size:12px;color:var(--slate);margin:4px 0 0;">If this customer came via a builders merchant, link them here.</p>
+          </div>
         </div>
 
         <div class="onboard-section">
@@ -2142,6 +2146,16 @@ function openOnboardingDetail(orgId){
   document.getElementById('obPostcode').value = org.postcode || '';
   document.getElementById('obWebsite').value = org.website || '';
 
+  const bmSel = document.getElementById('obBuildersMerchantId');
+  bmSel.innerHTML = '<option value="">— None —</option>' +
+    organisations.filter(o=>o.is_builders_merchant && o.id!==orgId).slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(o=>'<option value="'+o.id+'">'+escapeHtml(o.name)+'</option>').join('');
+  bmSel.value = '';
+  if(orgId){
+    const existingLink = organisationLinks.find(l=>l.linked_organisation_id===orgId);
+    if(existingLink) bmSel.value = existingLink.builders_merchant_id;
+  }
+
   document.getElementById('obContactFirst').value = org.contactFirstName || '';
   document.getElementById('obContactLast').value = org.contactLastName || '';
   document.getElementById('obContactJob').value = org.contactJobTitle || '';
@@ -2233,9 +2247,19 @@ async function saveOnboarding(){
   }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
   currentOnboardingOrgId = orgId;
+  await saveBuildersMerchantLinkForOrg(orgId);
   await loadOrganisations();
   showToast('Onboarding progress saved.');
   showOnboardingList();
+}
+
+async function saveBuildersMerchantLinkForOrg(orgId){
+  const buildersMerchantId = document.getElementById('obBuildersMerchantId').value || null;
+  if(!buildersMerchantId || !orgId || buildersMerchantId === orgId) return;
+  const alreadyLinked = organisationLinks.some(l=>l.builders_merchant_id===buildersMerchantId && l.linked_organisation_id===orgId);
+  if(alreadyLinked) return;
+  await sb.from('organisation_links').insert({ builders_merchant_id: buildersMerchantId, linked_organisation_id: orgId });
+  await loadOrganisationLinks();
 }
 async function toggleOnboardingLive(){
   const values = collectOnboardingFormValues();
@@ -2249,6 +2273,7 @@ async function toggleOnboardingLive(){
     if(currentOnboardingOrgId){ ({ error } = await sb.from('organisations').update(row).eq('id', currentOnboardingOrgId)); }
     else{ ({ data: { id: currentOnboardingOrgId } = {}, error } = await sb.from('organisations').insert(row).select().single()); }
     if(error){ showToast('Could not save: ' + error.message, true); return; }
+    await saveBuildersMerchantLinkForOrg(currentOnboardingOrgId);
     await loadOrganisations();
     banner.style.display = 'none';
     document.getElementById('onboardingLiveBadge').style.display = 'none';
@@ -2269,6 +2294,7 @@ async function toggleOnboardingLive(){
   }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
   currentOnboardingOrgId = newId;
+  await saveBuildersMerchantLinkForOrg(newId);
   await loadOrganisations();
 
   Object.keys(ONBOARDING_FIELD_INPUT_IDS).forEach(f=>{
