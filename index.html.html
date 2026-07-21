@@ -338,7 +338,10 @@
             <p class="view-title"><span id="orgDetailTitle"></span><span id="orgDetailLiveBadge" class="live-badge" style="display:none;">LIVE</span></p>
             <p class="view-sub" id="orgDetailSub"></p>
           </div>
-          <button class="btn ghost small" onclick="showOrganisationsList()">← Back</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn danger small" id="deleteOrgBtn" onclick="deleteOrganisation()" style="display:none;">Delete organisation</button>
+            <button class="btn ghost small" onclick="showOrganisationsList()">← Back</button>
+          </div>
         </div>
 
         <div class="onboard-section">
@@ -1711,6 +1714,29 @@ function showOrganisationsList(){
   renderOrganisationsList();
 }
 
+async function deleteOrganisation(){
+  if(!currentOrgPageOrgId) return;
+  if(currentProfile.role !== 'admin'){ showToast('Only admins can delete an organisation.', true); return; }
+  const orgId = currentOrgPageOrgId;
+  const linkedContacts = contacts.filter(c=>c.organisation_id===orgId).length;
+  const linkedTasks = tasks.filter(t=>t.organisation_id===orgId).length;
+  let warning = 'Delete this organisation? This cannot be undone.';
+  if(linkedContacts > 0 || linkedTasks > 0){
+    const bits = [];
+    if(linkedContacts > 0) bits.push(linkedContacts + ' contact' + (linkedContacts===1?'':'s'));
+    if(linkedTasks > 0) bits.push(linkedTasks + ' task' + (linkedTasks===1?'':'s'));
+    warning = 'Delete this organisation? It has ' + bits.join(' and ') + ' linked — they won\'t be deleted, but will no longer show a company. This cannot be undone.';
+  }
+  if(!confirm(warning)) return;
+  const { error } = await sb.from('organisations').delete().eq('id', orgId);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  await loadOrganisations();
+  await loadContacts();
+  await loadTasks();
+  showToast('Organisation deleted.');
+  showOrganisationsList();
+}
+
 function renderOrganisationsList(){
   const q = (document.getElementById('organisationsSearch').value || '').toLowerCase();
   const container = document.getElementById('organisationsListContainer');
@@ -1742,6 +1768,7 @@ function openOrganisationDetail(orgId){
   document.getElementById('orgDetailTitle').textContent = row.name;
   document.getElementById('orgDetailLiveBadge').style.display = row.onboarding_status==='live' ? 'inline-block' : 'none';
   document.getElementById('orgDetailSub').textContent = row.onboarding_status==='live' ? 'Live customer' : 'Currently onboarding';
+  document.getElementById('deleteOrgBtn').style.display = currentProfile.role === 'admin' ? 'inline-flex' : 'none';
 
   const summaryParts = [];
   const address = [row.address_line1, row.address_line2, row.city, row.county, row.postcode].filter(Boolean).join(', ');
