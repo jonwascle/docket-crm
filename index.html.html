@@ -710,6 +710,12 @@
         <span class="subtab active" data-taskview="open" onclick="switchTaskSubview('open')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Open</span>
         <span class="subtab" data-taskview="done" onclick="switchTaskSubview('done')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Completed</span>
       </div>
+      <div id="taskUserFilterWrap" style="display:none;margin-bottom:14px;max-width:260px;">
+        <label style="font-size:12px;font-weight:600;color:var(--slate);display:block;margin-bottom:4px;">Show tasks for</label>
+        <select id="taskUserFilter" onchange="onTaskUserFilterChange()">
+          <option value="all">Everyone</option>
+        </select>
+      </div>
       <div id="tasksListContainer"></div>
     </div>
 
@@ -1037,6 +1043,7 @@ let currentQuote = null;
 let tasks = [];
 let teamMembers = [];
 let currentTaskSubview = 'open';
+let currentTaskUserFilter = 'all';
 let currentAssetSubview = 'skip';
 let serviceProviders = [];
 let currentSPId = null;
@@ -1226,6 +1233,13 @@ async function afterLogin(user){
   await loadAssets();
   await loadQuotes();
   await loadTeamMembers();
+  if(profile.role === 'manager' || profile.role === 'admin'){
+    document.getElementById('taskUserFilterWrap').style.display = 'block';
+    const filterSelect = document.getElementById('taskUserFilter');
+    filterSelect.innerHTML = '<option value="all">Everyone</option>' +
+      teamMembers.slice().sort((a,b)=>(a.name||a.email).localeCompare(b.name||b.email))
+        .map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name||m.email)+'</option>').join('');
+  }
   await loadTasks();
   await loadServiceProviders();
   renderContacts();
@@ -3896,10 +3910,21 @@ function switchTaskSubview(view){
   renderTasks();
 }
 
+function onTaskUserFilterChange(){
+  currentTaskUserFilter = document.getElementById('taskUserFilter').value;
+  renderTasks();
+}
+
 function renderTasks(){
   const container = document.getElementById('tasksListContainer');
   const today = new Date().toISOString().slice(0,10);
+  const isElevated = currentProfile.role === 'manager' || currentProfile.role === 'admin';
   const filtered = tasks.filter(t=> currentTaskSubview==='open' ? t.status==='todo' : t.status==='done')
+    .filter(t=>{
+      if(!isElevated) return t.assigned_to === currentUser.id;
+      if(currentTaskUserFilter === 'all') return true;
+      return t.assigned_to === currentTaskUserFilter;
+    })
     .sort((a,b)=>{
       if(currentTaskSubview==='open'){
         if(a.due_date && b.due_date) return a.due_date < b.due_date ? -1 : 1;
