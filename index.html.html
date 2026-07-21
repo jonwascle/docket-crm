@@ -495,6 +495,9 @@
           <div class="onboard-progress-bar"><div class="onboard-progress-fill" id="onboardingProgressFill" style="width:0%;"></div></div>
         </div>
 
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate);margin-bottom:10px;cursor:pointer;">
+          <input type="checkbox" id="onboardingNotifyWapp" checked> Send onboarding summary to operations &amp; finance (for Wapp setup)
+        </label>
         <button class="btn ghost" onclick="toggleOnboardingLive()" style="width:100%;justify-content:center;margin-bottom:18px;" id="onboardingLiveBtn">Mark as live customer</button>
         <div id="onboardingMissingFieldsBanner" class="missing-fields-banner" style="display:none;"></div>
         <div id="onboardingPdfArea" style="margin-bottom:18px;"></div>
@@ -2285,6 +2288,12 @@ async function toggleOnboardingLive(){
   }
 
   const missingKeys = computeMissingOnboardingFields(values);
+  const willNotify = missingKeys.length === 0 && document.getElementById('onboardingNotifyWapp').checked;
+  if(willNotify){
+    if(!confirm('This will generate an onboarding summary PDF and email it to Operations and Finance so they can set this customer up on Wapp. Select OK to confirm.')){
+      return;
+    }
+  }
   const row = camelToOrgRow({...values, onboardingStatus: missingKeys.length===0 ? 'live' : 'onboarding'});
   let error, newId = currentOnboardingOrgId;
   if(currentOnboardingOrgId){
@@ -2313,7 +2322,9 @@ async function toggleOnboardingLive(){
     banner.style.display = 'none';
     document.getElementById('onboardingLiveBadge').style.display = 'inline-block';
     showToast('Marked as a live customer.');
-    generateAndSendOnboardingPdf({ ...row, id: newId });
+    if(willNotify){
+      generateAndSendOnboardingPdf({ ...row, id: newId });
+    }
   }
   updateOnboardingProgress();
 }
