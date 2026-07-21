@@ -178,7 +178,7 @@
         <select id="qtAssignedTo" style="font-size:16px;padding:12px;"></select>
       </div>
       <div class="field"><label>Organisation (optional)</label>
-        <input id="qtOrgSearch" list="qtOrgOptions" style="font-size:16px;padding:12px;" placeholder="Start typing...">
+        <input id="qtOrgSearch" list="qtOrgOptions" style="font-size:16px;padding:12px;" placeholder="Search, or type a new name to add it">
         <datalist id="qtOrgOptions"></datalist>
       </div>
       <div class="field"><label>Due date (optional)</label><input id="qtDueDate" type="date" style="font-size:16px;padding:12px;"></div>
@@ -1377,8 +1377,15 @@ async function saveQuickTask(){
   let organisationId = null;
   if(orgName){
     const match = organisations.find(o=>o.name.toLowerCase()===orgName.toLowerCase());
-    if(!match){ errEl.textContent = 'Could not find an organisation with that exact name — leave it blank if unsure.'; errEl.style.display = 'block'; return; }
-    organisationId = match.id;
+    if(match){
+      organisationId = match.id;
+    }else{
+      if(!confirm('"'+orgName+'" isn\'t in Docket yet — add it as a new organisation?')) return;
+      const { data: newOrg, error: newOrgErr } = await sb.from('organisations').insert({ name: orgName, onboarding_status: 'onboarding' }).select().single();
+      if(newOrgErr){ errEl.textContent = 'Could not add organisation: ' + newOrgErr.message; errEl.style.display = 'block'; return; }
+      await loadOrganisations();
+      organisationId = newOrg.id;
+    }
   }
 
   const assignedTo = document.getElementById('qtAssignedTo').value || null;
