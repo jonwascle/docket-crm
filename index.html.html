@@ -166,6 +166,35 @@
 </head>
 <body>
 
+<!-- ============ QUICK ADD TASK (mobile-friendly shortcut) ============ -->
+<div id="quickTaskScreen" style="display:none;">
+  <div style="max-width:480px;margin:0 auto;padding:28px 18px 60px;">
+    <h1 style="font-family:'Comfortaa',sans-serif;color:var(--brass);margin:0 0 4px;font-size:32px;">Docket</h1>
+    <p style="color:var(--slate);margin:0 0 24px;font-size:14px;">Quick add task</p>
+
+    <div id="quickTaskForm">
+      <div class="field"><label>Task *</label><input id="qtTitle" style="font-size:16px;padding:12px;" placeholder="What needs doing?"></div>
+      <div class="field"><label>Assign to</label>
+        <select id="qtAssignedTo" style="font-size:16px;padding:12px;"></select>
+      </div>
+      <div class="field"><label>Organisation (optional)</label>
+        <input id="qtOrgSearch" list="qtOrgOptions" style="font-size:16px;padding:12px;" placeholder="Start typing...">
+        <datalist id="qtOrgOptions"></datalist>
+      </div>
+      <div class="field"><label>Due date (optional)</label><input id="qtDueDate" type="date" style="font-size:16px;padding:12px;"></div>
+      <div class="field"><label>Notes (optional)</label><textarea id="qtNotes" style="font-size:16px;padding:12px;"></textarea></div>
+      <div class="login-error" id="quickTaskError"></div>
+      <button class="btn" id="quickTaskSaveBtn" onclick="saveQuickTask()" style="width:100%;justify-content:center;padding:16px;font-size:16px;margin-top:6px;">Add task</button>
+    </div>
+
+    <div id="quickTaskSuccess" style="display:none;text-align:center;padding:50px 0;">
+      <h2 style="font-family:'Comfortaa',sans-serif;">Added!</h2>
+      <p style="color:var(--slate);margin-bottom:24px;">Your task has been saved to Docket.</p>
+      <button class="btn" onclick="resetQuickTaskForm()" style="width:100%;justify-content:center;padding:16px;font-size:16px;">Add another</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ PUBLIC SUPPLIER ONBOARDING FORM (no login needed) ============ -->
 <div id="publicOnboardScreen" style="display:none;">
   <div style="max-width:640px;margin:0 auto;padding:40px 20px 110px;">
@@ -865,6 +894,10 @@
     <div class="field"><label>Contact</label>
       <select id="dContactId"><option value="">— None —</option></select>
     </div>
+    <div class="field"><label>Builders merchant (optional)</label>
+      <select id="dBuildersMerchantId"><option value="">— None —</option></select>
+      <p style="font-size:12px;color:var(--slate);margin:4px 0 0;">If this lead came via a builders merchant, link them here — this connects the merchant to the customer's organisation.</p>
+    </div>
     <div class="field"><label>Value (£)</label><input id="dValue" type="number" min="0" step="0.01"></div>
     <div class="field"><label>Stage</label>
       <select id="dStage">
@@ -1296,8 +1329,80 @@ async function afterLogin(user){
   await loadTasks();
   await loadServiceProviders();
   renderContacts();
+
+  if(window.location.hash.match(/^#quick-task/i)){
+    showQuickTaskScreen();
+    return;
+  }
+
   const wasTaskLink = handleTaskDeepLink();
   if(!wasTaskLink) await restoreAppViewFromHash();
+}
+
+function showQuickTaskScreen(){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('quickTaskScreen').style.display = 'block';
+  resetQuickTaskForm();
+}
+
+function resetQuickTaskForm(){
+  document.getElementById('quickTaskSuccess').style.display = 'none';
+  document.getElementById('quickTaskForm').style.display = 'block';
+  document.getElementById('quickTaskError').style.display = 'none';
+
+  document.getElementById('qtTitle').value = '';
+  document.getElementById('qtOrgSearch').value = '';
+  document.getElementById('qtDueDate').value = '';
+  document.getElementById('qtNotes').value = '';
+
+  const assignSel = document.getElementById('qtAssignedTo');
+  assignSel.innerHTML = teamMembers.slice().sort((a,b)=>(a.name||a.email).localeCompare(b.name||b.email))
+    .map(m=>'<option value="'+m.id+'">'+escapeHtml((m.id===currentUser.id ? 'Me — ' : '') + (m.name||m.email))+'</option>').join('');
+  assignSel.value = currentUser.id;
+
+  document.getElementById('qtOrgOptions').innerHTML = organisations.slice().sort((a,b)=>a.name.localeCompare(b.name))
+    .map(o=>'<option value="'+escapeHtml(o.name)+'">').join('');
+
+  document.getElementById('qtTitle').focus();
+}
+
+async function saveQuickTask(){
+  const errEl = document.getElementById('quickTaskError');
+  errEl.style.display = 'none';
+  const title = document.getElementById('qtTitle').value.trim();
+  if(!title){ errEl.textContent = 'Enter what needs doing.'; errEl.style.display = 'block'; return; }
+
+  const orgName = document.getElementById('qtOrgSearch').value.trim();
+  let organisationId = null;
+  if(orgName){
+    const match = organisations.find(o=>o.name.toLowerCase()===orgName.toLowerCase());
+    if(!match){ errEl.textContent = 'Could not find an organisation with that exact name — leave it blank if unsure.'; errEl.style.display = 'block'; return; }
+    organisationId = match.id;
+  }
+
+  const assignedTo = document.getElementById('qtAssignedTo').value || null;
+  const btn = document.getElementById('quickTaskSaveBtn');
+  btn.disabled = true; btn.textContent = 'Adding…';
+
+  const payload = {
+    title,
+    notes: document.getElementById('qtNotes').value.trim(),
+    organisation_id: organisationId,
+    assigned_to: assignedTo,
+    due_date: document.getElementById('qtDueDate').value || null,
+    status: 'todo',
+    created_by: currentUser.id
+  };
+  const res = await sb.from('tasks').insert(payload).select().single();
+  btn.disabled = false; btn.textContent = 'Add task';
+  if(res.error){ errEl.textContent = 'Could not save: ' + res.error.message; errEl.style.display = 'block'; return; }
+
+  await loadTasks();
+  if(assignedTo && res.data){ notifyTaskAssignment(res.data.id); }
+
+  document.getElementById('quickTaskForm').style.display = 'none';
+  document.getElementById('quickTaskSuccess').style.display = 'block';
 }
 
 function handleTaskDeepLink(){
@@ -1626,6 +1731,20 @@ function openDealModal(id){
   document.getElementById('dStage').value = d ? d.stage : 'lead';
   document.getElementById('dNotes').value = d ? (d.notes||'') : '';
   document.getElementById('dealDeleteBtn').style.display = d ? 'inline-flex' : 'none';
+
+  const bmSel = document.getElementById('dBuildersMerchantId');
+  bmSel.innerHTML = '<option value="">— None —</option>' +
+    organisations.filter(o=>o.is_builders_merchant).slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(o=>'<option value="'+o.id+'">'+escapeHtml(o.name)+'</option>').join('');
+  bmSel.value = '';
+  if(d && d.contact_id){
+    const contact = contacts.find(c=>c.id===d.contact_id);
+    if(contact && contact.organisation_id){
+      const existingLink = organisationLinks.find(l=>l.linked_organisation_id===contact.organisation_id);
+      if(existingLink) bmSel.value = existingLink.builders_merchant_id;
+    }
+  }
+
   document.getElementById('dealModalOverlay').classList.add('active');
 }
 
@@ -1633,9 +1752,11 @@ async function saveDeal(){
   const id = document.getElementById('dealId').value;
   const title = document.getElementById('dTitle').value.trim();
   if(!title){ showToast('Deal title is required.', true); return; }
+  const contactId = document.getElementById('dContactId').value || null;
+  const buildersMerchantId = document.getElementById('dBuildersMerchantId').value || null;
   const payload = {
     title,
-    contact_id: document.getElementById('dContactId').value || null,
+    contact_id: contactId,
     value: document.getElementById('dValue').value ? Number(document.getElementById('dValue').value) : null,
     stage: document.getElementById('dStage').value,
     notes: document.getElementById('dNotes').value.trim()
@@ -1647,6 +1768,18 @@ async function saveDeal(){
     ({ error } = await sb.from('deals').insert(payload));
   }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
+
+  if(buildersMerchantId && contactId){
+    const contact = contacts.find(c=>c.id===contactId);
+    if(contact && contact.organisation_id && contact.organisation_id !== buildersMerchantId){
+      const alreadyLinked = organisationLinks.some(l=>l.builders_merchant_id===buildersMerchantId && l.linked_organisation_id===contact.organisation_id);
+      if(!alreadyLinked){
+        await sb.from('organisation_links').insert({ builders_merchant_id: buildersMerchantId, linked_organisation_id: contact.organisation_id });
+        await loadOrganisationLinks();
+      }
+    }
+  }
+
   closeModal('dealModalOverlay');
   await loadDeals();
   renderPipeline();
