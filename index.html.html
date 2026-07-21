@@ -448,6 +448,7 @@
 
         <button class="btn ghost" onclick="toggleOnboardingLive()" style="width:100%;justify-content:center;margin-bottom:18px;" id="onboardingLiveBtn">Mark as live customer</button>
         <div id="onboardingMissingFieldsBanner" class="missing-fields-banner" style="display:none;"></div>
+        <div id="onboardingPdfArea" style="margin-bottom:18px;"></div>
 
         <div class="onboard-section">
           <div class="onboard-section-head"><span class="onboard-section-title">Tasks for this organisation</span><button class="btn ghost small" onclick="openTaskModal(null, {organisationId: currentOnboardingOrgId})" id="onboardingAddTaskBtn" style="display:none;">+ Add task</button></div>
@@ -729,6 +730,31 @@
         <button class="btn small" id="newTeamMemberBtn" onclick="openNewTeamMemberModal()" style="display:none;">+ New team member</button>
       </div>
       <div id="teamContainer"></div>
+
+      <div id="notificationEmailsSection" style="display:none;margin-top:36px;">
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Notification emails</span></div>
+          <p style="font-size:13px;color:var(--slate);margin-top:0;">When a customer is marked as live, a summary PDF is automatically emailed to everyone listed here.</p>
+          <div class="field-row">
+            <div>
+              <label style="font-size:12px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:0.4px;">Operations</label>
+              <div id="notifyEmailsOperations" style="margin:8px 0;"></div>
+              <div style="display:flex;gap:8px;">
+                <input id="notifyEmailOperationsInput" type="email" placeholder="name@wascle.co.uk" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addNotificationEmail('operations');}">
+                <button class="btn ghost small" onclick="addNotificationEmail('operations')">+ Add</button>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:0.4px;">Finance</label>
+              <div id="notifyEmailsFinance" style="margin:8px 0;"></div>
+              <div style="display:flex;gap:8px;">
+                <input id="notifyEmailFinanceInput" type="email" placeholder="name@wascle.co.uk" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addNotificationEmail('finance');}">
+                <button class="btn ghost small" onclick="addNotificationEmail('finance')">+ Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1056,6 +1082,7 @@ let spDefaultPricing = [];
 let spProviderPricing = [];
 let currentSPRecruitmentStage = 'prospect';
 let spOnboardingLinks = [];
+let notificationEmails = [];
 const SP_FUNCTIONS_URL = 'https://sjqjqthjvohebnjtaqaz.supabase.co/functions/v1/';
 let pubOnboardToken = null;
 let pubTeamMembers = [];
@@ -1226,6 +1253,10 @@ async function afterLogin(user){
     document.getElementById('teamNavItem').style.display = 'block';
     document.getElementById('newTeamMemberBtn').style.display = 'inline-flex';
     document.getElementById('spDefaultPricingBtn').style.display = 'inline-flex';
+  }
+  if(profile.role === 'admin'){
+    document.getElementById('notificationEmailsSection').style.display = 'block';
+    await loadNotificationEmails();
   }
   await loadOrganisations();
   await loadContacts();
@@ -1835,6 +1866,7 @@ function openOnboardingDetail(orgId){
   const org = row ? orgRowToCamel(row) : {};
   document.getElementById('onboardingDetailTitle').textContent = row ? 'Edit customer' : 'New customer';
   document.getElementById('onboardingLiveBadge').style.display = (org.onboardingStatus==='live') ? 'inline-block' : 'none';
+  renderOnboardingPdfArea(row);
 
   document.getElementById('obCustomerName').value = org.name || '';
   document.getElementById('obAddr1').value = org.addressLine1 || '';
@@ -1987,8 +2019,75 @@ async function toggleOnboardingLive(){
     banner.style.display = 'none';
     document.getElementById('onboardingLiveBadge').style.display = 'inline-block';
     showToast('Marked as a live customer.');
+    generateAndSendOnboardingPdf({ ...row, id: newId });
   }
   updateOnboardingProgress();
+}
+
+function renderOnboardingPdfArea(row){
+  const container = document.getElementById('onboardingPdfArea');
+  if(!container) return;
+  if(!row || !row.onboarding_pdf_path){
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = '<button class="btn ghost small" onclick="downloadOnboardingSummaryPdf()">Download onboarding summary PDF</button>'
+    + '<p style="font-size:11.5px;color:var(--slate);margin-top:6px;">Generated '+new Date(row.onboarding_pdf_generated_at).toLocaleDateString('en-GB')+', and emailed to operations and finance.</p>';
+}
+
+async function downloadOnboardingSummaryPdf(){
+  const row = currentOnboardingOrgId ? organisations.find(o=>o.id===currentOnboardingOrgId) : null;
+  if(!row || !row.onboarding_pdf_path){ showToast('No summary PDF has been generated for this customer yet.', true); return; }
+  const { data, error } = await sb.storage.from('organisation-onboarding-pdfs').createSignedUrl(row.onboarding_pdf_path, 60);
+  if(error){ showToast('Could not open the PDF: ' + error.message, true); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
+function bytesToBase64(bytes){
+  let binary = '';
+  const chunkSize = 8192;
+  for(let i=0; i<bytes.length; i+=chunkSize){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function generateAndSendOnboardingPdf(org){
+  try{
+    const pdfString = buildOnboardingSummaryPdfString(org);
+    const bytes = new Uint8Array(pdfString.length);
+    for(let i=0;i<pdfString.length;i++){
+      const code = pdfString.charCodeAt(i);
+      bytes[i] = code < 256 ? code : 0x3F;
+    }
+    const path = org.id + '/onboarding-summary.pdf';
+    const { error: uploadErr } = await sb.storage.from('organisation-onboarding-pdfs').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+    if(uploadErr){
+      showToast('Marked as live, but the summary PDF could not be saved: ' + uploadErr.message, true);
+      return;
+    }
+    await sb.from('organisations').update({ onboarding_pdf_path: path, onboarding_pdf_generated_at: new Date().toISOString() }).eq('id', org.id);
+    await loadOrganisations();
+    if(currentOnboardingOrgId === org.id){
+      const updatedRow = organisations.find(o=>o.id===org.id);
+      renderOnboardingPdfArea(updatedRow);
+    }
+
+    // Best-effort: also email it straight to operations and finance. This
+    // quietly won't send anything until an email provider is configured on
+    // the send-onboarding-pdf function — the PDF itself is still saved and
+    // downloadable either way.
+    const { data: { session } } = await sb.auth.getSession();
+    if(session){
+      fetch(SP_FUNCTIONS_URL + 'send-onboarding-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+        body: JSON.stringify({ orgName: org.name, pdfBase64: bytesToBase64(bytes) })
+      }).catch(()=>{});
+    }
+  }catch(e){
+    showToast('Marked as live, but the summary PDF could not be created.', true);
+  }
 }
 
 /* ---------- Team (admin: view everyone, change roles) ---------- */
@@ -3515,6 +3614,44 @@ async function generateSPOnboardingLink(){
   showToast('New link created (any previous link for this provider no longer works) and copied to your clipboard.');
 }
 
+async function loadNotificationEmails(){
+  const { data, error } = await sb.from('notification_emails').select('*').order('email');
+  if(error){ showToast('Could not load notification emails: ' + error.message, true); return; }
+  notificationEmails = data || [];
+  renderNotificationEmails();
+}
+
+function renderNotificationEmails(){
+  ['operations','finance'].forEach(cat=>{
+    const container = document.getElementById(cat==='operations' ? 'notifyEmailsOperations' : 'notifyEmailsFinance');
+    const rows = notificationEmails.filter(e=>e.category===cat);
+    if(rows.length===0){
+      container.innerHTML = '<p style="color:var(--slate);font-size:12.5px;">No addresses added yet.</p>';
+      return;
+    }
+    container.innerHTML = rows.map(e=>
+      '<span class="postcode-chip" style="margin:0 6px 6px 0;">'+escapeHtml(e.email)+'<span class="postcode-chip-remove" onclick="removeNotificationEmail(\''+e.id+'\')">✕</span></span>'
+    ).join('');
+  });
+}
+
+async function addNotificationEmail(category){
+  const input = document.getElementById(category==='operations' ? 'notifyEmailOperationsInput' : 'notifyEmailFinanceInput');
+  const email = input.value.trim();
+  if(!email) return;
+  if(!email.includes('@')){ showToast('Enter a valid email address.', true); return; }
+  const { error } = await sb.from('notification_emails').insert({ category, email });
+  if(error){ showToast('Could not add: ' + error.message, true); return; }
+  input.value = '';
+  await loadNotificationEmails();
+}
+
+async function removeNotificationEmail(id){
+  const { error } = await sb.from('notification_emails').delete().eq('id', id);
+  if(error){ showToast('Could not remove: ' + error.message, true); return; }
+  await loadNotificationEmails();
+}
+
 function copyTextToClipboard(text){
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard.')).catch(()=>showToast('Could not copy — select and copy manually.', true));
@@ -4500,6 +4637,163 @@ function buildQuotePdfString(q, c, options){
   y += 2;
   newPageIfNeeded(16);
   text(options.footerText || 'Prices are quoted in GBP, plus VAT, and valid for 30 days from the date above.', marginX, y, 8, '0.6 0.6 0.6', 'F1');
+
+  flushPage();
+
+  const catalogId = 1, pagesId = 2, fontRegId = 3, fontBoldId = 4, imageId = 5;
+  const fontDescRegId = 6, fontFileRegId = 7, fontDescBoldId = 8, fontFileBoldId = 9;
+  let nextId = 10;
+  const pageIds = [];
+  const contentIds = [];
+  const pageChunks = [];
+  const contentChunks = [];
+
+  pages.forEach(cmdList=>{
+    const pageId = nextId++;
+    const contentId = nextId++;
+    pageIds.push(pageId);
+    contentIds.push(contentId);
+    const stream = cmdList.join('\n');
+    contentChunks.push(contentId+' 0 obj\n<< /Length '+stream.length+' >>\nstream\n'+stream+'\nendstream\nendobj\n');
+    pageChunks.push(pageId+' 0 obj\n<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 '+pageW+' '+pageH+'] /Resources << /Font << /F1 '+fontRegId+' 0 R /F2 '+fontBoldId+' 0 R >> /XObject << /Im1 '+imageId+' 0 R >> >> /Contents '+contentId+' 0 R >>\nendobj\n');
+  });
+
+  const catalogObj = catalogId+' 0 obj\n<< /Type /Catalog /Pages '+pagesId+' 0 R >>\nendobj\n';
+  const pagesObj = pagesId+' 0 obj\n<< /Type /Pages /Kids ['+pageIds.map(id=>id+' 0 R').join(' ')+'] /Count '+pageIds.length+' >>\nendobj\n';
+
+  const regFontBytes = atob(COMFORTAA_REGULAR_B64);
+  const boldFontBytes = atob(COMFORTAA_BOLD_B64);
+
+  const fontRegObj = fontRegId+' 0 obj\n<< /Type /Font /Subtype /TrueType /BaseFont /Comfortaa /FirstChar 32 /LastChar 163 /Widths ['+COMFORTAA_REG_WIDTHS.join(' ')+'] /FontDescriptor '+fontDescRegId+' 0 R /Encoding /WinAnsiEncoding >>\nendobj\n';
+  const fontBoldObj = fontBoldId+' 0 obj\n<< /Type /Font /Subtype /TrueType /BaseFont /Comfortaa-Bold /FirstChar 32 /LastChar 163 /Widths ['+COMFORTAA_BOLD_WIDTHS.join(' ')+'] /FontDescriptor '+fontDescBoldId+' 0 R /Encoding /WinAnsiEncoding >>\nendobj\n';
+
+  const fontDescRegObj = fontDescRegId+' 0 obj\n<< /Type /FontDescriptor /FontName /Comfortaa /Flags 32 /FontBBox ['+COMFORTAA_REG_DESC.bbox.join(' ')+'] /ItalicAngle 0 /Ascent '+COMFORTAA_REG_DESC.ascent+' /Descent '+COMFORTAA_REG_DESC.descent+' /CapHeight '+COMFORTAA_REG_DESC.capHeight+' /StemV 80 /FontFile2 '+fontFileRegId+' 0 R >>\nendobj\n';
+  const fontDescBoldObj = fontDescBoldId+' 0 obj\n<< /Type /FontDescriptor /FontName /Comfortaa-Bold /Flags 32 /FontBBox ['+COMFORTAA_BOLD_DESC.bbox.join(' ')+'] /ItalicAngle 0 /Ascent '+COMFORTAA_BOLD_DESC.ascent+' /Descent '+COMFORTAA_BOLD_DESC.descent+' /CapHeight '+COMFORTAA_BOLD_DESC.capHeight+' /StemV 120 /FontFile2 '+fontFileBoldId+' 0 R >>\nendobj\n';
+
+  const fontFileRegObj = fontFileRegId+' 0 obj\n<< /Length '+regFontBytes.length+' /Length1 '+regFontBytes.length+' >>\nstream\n'+regFontBytes+'\nendstream\nendobj\n';
+  const fontFileBoldObj = fontFileBoldId+' 0 obj\n<< /Length '+boldFontBytes.length+' /Length1 '+boldFontBytes.length+' >>\nstream\n'+boldFontBytes+'\nendstream\nendobj\n';
+
+  const imageBytes = atob(LOGO_JPEG_BASE64);
+  const imageObj = imageId+' 0 obj\n<< /Type /XObject /Subtype /Image /Width '+LOGO_PX_W+' /Height '+LOGO_PX_H+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+imageBytes.length+' >>\nstream\n'+imageBytes+'\nendstream\nendobj\n';
+
+  let body = '%PDF-1.4\n';
+  const offsets = {};
+  function append(id, str){ offsets[id] = body.length; body += str; }
+
+  append(catalogId, catalogObj);
+  append(pagesId, pagesObj);
+  append(fontRegId, fontRegObj);
+  append(fontBoldId, fontBoldObj);
+  append(imageId, imageObj);
+  append(fontDescRegId, fontDescRegObj);
+  append(fontFileRegId, fontFileRegObj);
+  append(fontDescBoldId, fontDescBoldObj);
+  append(fontFileBoldId, fontFileBoldObj);
+  pageChunks.forEach((str,i)=>append(pageIds[i], str));
+  contentChunks.forEach((str,i)=>append(contentIds[i], str));
+
+  const totalObjs = nextId - 1;
+  const xrefStart = body.length;
+  let xref = 'xref\n0 '+(totalObjs+1)+'\n0000000000 65535 f \n';
+  for(let i=1;i<=totalObjs;i++){
+    const off = offsets[i] !== undefined ? offsets[i] : 0;
+    xref += String(off).padStart(10,'0')+' 00000 n \n';
+  }
+  body += xref;
+  body += 'trailer\n<< /Size '+(totalObjs+1)+' /Root '+catalogId+' 0 R >>\nstartxref\n'+xrefStart+'\n%%EOF';
+
+  return body;
+}
+
+function buildOnboardingSummaryPdfString(org){
+  const pageW = 595, pageH = 842;
+  const marginX = 50, rightX = pageW - marginX;
+  const bottomLimit = 70;
+  let y = 55;
+
+  const pages = [];
+  let cmds = [];
+
+  function flushPage(){ pages.push(cmds); cmds = []; }
+  function newPageIfNeeded(minSpace){
+    if(y + minSpace > pageH - bottomLimit){ flushPage(); y = 55; }
+  }
+  function text(str, x, yTop, size, colorRG, font){
+    cmds.push('BT /'+(font||'F1')+' '+size+' Tf '+colorRG+' rg 1 0 0 1 '+x.toFixed(2)+' '+(pageH-yTop).toFixed(2)+' Tm ('+pdfEscapeText(str)+') Tj ET');
+  }
+  function line(x1, yTop1, x2, yTop2, width, colorRG){
+    cmds.push(colorRG+' RG '+width+' w '+x1.toFixed(2)+' '+(pageH-yTop1).toFixed(2)+' m '+x2.toFixed(2)+' '+(pageH-yTop2).toFixed(2)+' l S');
+  }
+  function image(x, yTop, w, h){
+    const pdfBottomY = pageH - (yTop + h);
+    cmds.push('q '+w.toFixed(2)+' 0 0 '+h.toFixed(2)+' '+x.toFixed(2)+' '+pdfBottomY.toFixed(2)+' cm /Im1 Do Q');
+  }
+  function wrapText(str, maxChars){
+    const words = String(str).split(' ');
+    const lines = []; let cur = '';
+    words.forEach(w=>{
+      if((cur+' '+w).trim().length > maxChars){ lines.push(cur.trim()); cur = w; }
+      else{ cur = (cur+' '+w).trim(); }
+    });
+    if(cur) lines.push(cur);
+    return lines;
+  }
+  function sectionHeading(label){
+    newPageIfNeeded(24);
+    text(label.toUpperCase(), marginX, y, 9, '0.15 0.15 0.15', 'F2');
+    y += 15;
+  }
+  function fieldRow(label, value){
+    if(!value) return;
+    const lines = wrapText(String(value), 70);
+    newPageIfNeeded(12 * lines.length + 8);
+    text(label, marginX, y, 8, '0.55 0.55 0.55', 'F1');
+    lines.forEach((ln,i)=>{
+      text(ln, marginX + 150, y + (i*12), 9.5, '0.08 0.08 0.08', 'F1');
+    });
+    y += Math.max(12 * lines.length, 12) + 6;
+  }
+
+  const logoW = 150, logoH = logoW * (LOGO_PX_H / LOGO_PX_W);
+  image(rightX - logoW, y, logoW, logoH);
+  text('CUSTOMER ONBOARDING SUMMARY', marginX, y + 12, 8.5, '0.5 0.5 0.5', 'F1');
+  y += logoH + 22;
+
+  text(org.name || 'Unnamed customer', marginX, y, 14, '0.1 0.1 0.1', 'F2');
+  text('LIVE FROM ' + new Date().toLocaleDateString('en-GB'), rightX - 150, y, 8, '0.55 0.55 0.55', 'F1');
+  y += 22;
+  line(marginX, y, rightX, y, 1, '0.1 0.1 0.1');
+  y += 20;
+
+  sectionHeading('Organisation');
+  fieldRow('Address', [org.address_line1, org.address_line2, org.city, org.county, org.postcode].filter(Boolean).join(', '));
+  fieldRow('Website', org.website);
+  y += 8;
+
+  sectionHeading('Main contact');
+  fieldRow('Name', [org.contact_first_name, org.contact_last_name].filter(Boolean).join(' '));
+  fieldRow('Job title', org.contact_job_title);
+  fieldRow('Phone', org.contact_phone);
+  fieldRow('Email', org.contact_email);
+  fieldRow('Waste transfer notes', org.contact_send_wtn ? ('Yes — to ' + (org.contact_wtn_email || org.contact_email || '')) : 'No');
+  y += 8;
+
+  sectionHeading('Finance contact');
+  fieldRow('Name', [org.finance_first_name, org.finance_last_name].filter(Boolean).join(' '));
+  fieldRow('Job title', org.finance_job_title);
+  fieldRow('Phone', org.finance_phone);
+  fieldRow('Email', org.finance_email);
+  fieldRow('Invoices sent to', org.finance_invoice_email || org.finance_email);
+  y += 8;
+
+  if(org.notes){
+    sectionHeading('Notes');
+    fieldRow('', org.notes);
+  }
+
+  y += 6;
+  newPageIfNeeded(16);
+  text('Generated automatically by Docket when this customer was marked as live.', marginX, y, 8, '0.6 0.6 0.6', 'F1');
 
   flushPage();
 
