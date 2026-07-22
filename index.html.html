@@ -678,6 +678,7 @@
             <div class="field"><label>Email</label><input id="spEmail" type="email"></div>
             <div class="field"><label>Phone</label><input id="spPhone"></div>
           </div>
+          <div class="field"><label>Website</label><input id="spWebsite"></div>
           <div class="field"><label>VAT registered?</label>
             <select id="spVatRegistered" onchange="onSPVatToggleChange()">
               <option value="no">No</option><option value="yes">Yes</option>
@@ -767,6 +768,20 @@
         </div>
 
         <div id="spSubtab-recruitment" style="display:none;">
+          <div id="spQuickAddArea" style="display:none;">
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:0;">Add the basics to get this prospect on Docket — you can fill in everything else later, on the other tabs.</p>
+            <div class="field"><label>Name of service provider *</label><input id="spQuickName"></div>
+            <div class="field"><label>Phone number *</label><input id="spQuickPhone"></div>
+            <div class="field-row">
+              <div class="field"><label>Website</label><input id="spQuickWebsite"></div>
+              <div class="field"><label>Email address</label><input id="spQuickEmail" type="email"></div>
+            </div>
+            <div class="field" style="max-width:260px;"><label>Location (county)</label><input id="spQuickCounty"></div>
+            <div class="login-error" id="spQuickAddError" style="display:none;"></div>
+            <button class="btn" onclick="saveQuickProspect()" style="margin-top:6px;">Save prospect</button>
+          </div>
+
+          <div id="spRecruitmentNormalArea">
           <div class="field">
             <label>Recruitment stage</label>
             <div id="spRecruitmentStageTracker" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
@@ -783,6 +798,7 @@
           <div class="onboard-section" style="margin-top:24px;">
             <div class="onboard-section-head"><span class="onboard-section-title">Declined</span></div>
             <div id="spDeclinedArea"></div>
+          </div>
           </div>
         </div>
       </div>
@@ -3008,6 +3024,7 @@ async function openServiceProviderDetail(id){
   document.getElementById('spPostcode').value = row ? (row.postcode||'') : '';
   document.getElementById('spLicenceNumber').value = row ? (row.waste_carriers_licence_number||'') : '';
   document.getElementById('spEmail').value = row ? (row.email||'') : '';
+  document.getElementById('spWebsite').value = row ? (row.website||'') : '';
   document.getElementById('spPhone').value = row ? (row.phone||'') : '';
   document.getElementById('spVatRegistered').value = (row && row.vat_registered) ? 'yes' : 'no';
   document.getElementById('spVatNumber').value = row ? (row.vat_number||'') : '';
@@ -3047,6 +3064,15 @@ async function openServiceProviderDetail(id){
   renderSPRecruitmentStageTracker();
   renderSPRecruitmentGuidance();
   renderSPDeclinedArea(row);
+
+  document.getElementById('spQuickAddArea').style.display = row ? 'none' : 'block';
+  document.getElementById('spRecruitmentNormalArea').style.display = row ? 'block' : 'none';
+  if(!row){
+    ['spQuickName','spQuickPhone','spQuickWebsite','spQuickEmail','spQuickCounty'].forEach(fid=>{
+      document.getElementById(fid).value = '';
+    });
+    document.getElementById('spQuickAddError').style.display = 'none';
+  }
 
   if(id){
     await loadSPDocuments(id);
@@ -3251,6 +3277,7 @@ async function saveServiceProvider(silent){
     postcode: document.getElementById('spPostcode').value.trim(),
     waste_carriers_licence_number: document.getElementById('spLicenceNumber').value.trim(),
     email: document.getElementById('spEmail').value.trim(),
+    website: document.getElementById('spWebsite').value.trim(),
     phone: document.getElementById('spPhone').value.trim(),
     vat_registered: document.getElementById('spVatRegistered').value === 'yes',
     vat_number: document.getElementById('spVatNumber').value.trim(),
@@ -3969,6 +3996,31 @@ function renderSPRecruitmentGuidance(){
   }
   html += '</div>';
   container.innerHTML = html;
+}
+
+async function saveQuickProspect(){
+  const errEl = document.getElementById('spQuickAddError');
+  errEl.style.display = 'none';
+  const name = document.getElementById('spQuickName').value.trim();
+  const phone = document.getElementById('spQuickPhone').value.trim();
+  if(!name || !phone){
+    errEl.textContent = 'Name and phone number are both required.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const payload = {
+    name,
+    phone,
+    website: document.getElementById('spQuickWebsite').value.trim(),
+    email: document.getElementById('spQuickEmail').value.trim(),
+    county: document.getElementById('spQuickCounty').value.trim(),
+    recruitment_stage: 'prospect'
+  };
+  const { data, error } = await sb.from('service_providers').insert(payload).select().single();
+  if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+  await loadServiceProviders();
+  showToast('Prospect added.');
+  openServiceProviderDetail(data.id);
 }
 
 function renderSPDeclinedArea(row){
