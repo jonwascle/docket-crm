@@ -644,9 +644,9 @@
             <option value="declined">Declined only</option>
             <option value="prospect">Prospect</option>
             <option value="contacted">Called them</option>
-            <option value="link_sent">Sent onboarding link</option>
-            <option value="reviewing">Reviewing their info</option>
             <option value="pricing_setup">Pricing set up</option>
+            <option value="link_sent">Info &amp; pricing email</option>
+            <option value="reviewing">Reviewing their info</option>
             <option value="wts_check">Checked WTS licence</option>
             <option value="wapp_entry">Entered on Wapp</option>
             <option value="live">Live</option>
@@ -1270,19 +1270,19 @@ const SP_RECRUITMENT_STAGES = [
   },
   {
     key: 'contacted', label: 'Called them',
-    guidance: 'CALL SCRIPT (adapt as needed):\n\n"Hi, is that [Contact Name]? This is [Your Name] calling from Wascle — we\'re a waste clearance company and we work with local service providers like yourselves to help manage skip collections and waste transfer in your area.\n\nWould you be interested in working with us as one of our service providers? We\'d handle sending you the work, and pay on [payment terms] — I\'d love to send you a bit more information by email so you can have a look and see if it\'s a good fit."\n\nIf they\'re interested, get their best email address and move to the next stage to send the follow-up email.'
+    guidance: 'CALL SCRIPT (adapt as needed):\n\n"Hi, is that [Contact Name]? This is [Your Name] calling from Wascle — we\'re a waste clearance company and we work with local service providers like yourselves to help manage skip collections and waste transfer in your area.\n\nWould you be interested in working with us as one of our service providers? We\'d handle sending you the work, and pay on [payment terms] — I\'d love to send you a bit more information by email so you can have a look and see if it\'s a good fit."\n\nIf they\'re interested, get their best email address and move to the next stage to set up their pricing before you email them.'
   },
   {
-    key: 'link_sent', label: 'Sent onboarding link',
-    guidance: 'FOLLOW-UP EMAIL (adapt as needed):\n\nSubject: Wascle — working together as a service provider\n\nHi [Contact Name],\n\nThanks for taking the time to speak with me today. As discussed, we\'d love to have you on board as one of our service providers.\n\nA bit about us: [add a line or two about Wascle here]\nOur website: [add website link]\n[Add a short video link here if useful]\n\nTo get you set up, please fill in your details using the secure link below — it only takes a few minutes and covers your company details, team, waste transfer station, and any documents like your insurance and waste carriers licence:\n\n[Paste the onboarding link from below into your email]\n\nOnce you\'ve done that, we\'ll be in touch to agree pricing and get you live.\n\nThanks,\n[Your name]\n\n---\nGenerate the link below, then copy it into this email before sending.'
+    key: 'pricing_setup', label: 'Pricing set up',
+    guidance: 'Before emailing them, get their rates sorted so you can actually send them over. Head to the Pricing tab — tick which services they cover, then agree and enter their rates line by line (or use the default starting rates if you haven\'t discussed specifics yet). Once that\'s done, download the pricing PDF so it\'s ready to attach to the follow-up email.'
+  },
+  {
+    key: 'link_sent', label: 'Info & pricing email',
+    guidance: 'FOLLOW-UP EMAIL (adapt as needed) — attach the pricing PDF you downloaded on the last stage, and include the onboarding link from below:\n\nSubject: Wascle — working together as a service provider\n\nHi [Contact Name],\n\nThanks for taking the time to speak with me today. As discussed, we\'d love to have you on board as one of our service providers.\n\nA bit about us: [add a line or two about Wascle here]\nOur website: [add website link]\n[Add a short video link here if useful]\n\nI\'ve attached our rates for the services we discussed — take a look and let me know if you have any questions.\n\nTo get you set up, please also fill in your details using the secure link below — it only takes a few minutes and covers your company details, team, waste transfer station, and any documents like your insurance and waste carriers licence:\n\n[Paste the onboarding link from below into your email]\n\nOnce you\'ve done that, we\'ll be in touch to get you live.\n\nThanks,\n[Your name]\n\n---\nGenerate the link below, then copy it into this email before sending, along with the pricing PDF.'
   },
   {
     key: 'reviewing', label: 'Reviewing their info',
     guidance: 'Once they\'ve submitted the form, their answers appear directly in the Details, Team members, Waste transfer stations, and Documents tabs on this page — check those over. Chase them if anything important is still missing.'
-  },
-  {
-    key: 'pricing_setup', label: 'Pricing set up',
-    guidance: 'Head to the Pricing tab and go through their rates with them on a call — tick which services they cover, then agree and enter their rates line by line (or download the pricing PDF to send over first if that\'s easier).'
   },
   {
     key: 'wts_check', label: 'Checked waste transfer station licence',
