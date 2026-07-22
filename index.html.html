@@ -612,7 +612,6 @@
             <p class="view-sub">Everyone who collects waste on our behalf — their details, documents, and coverage.</p>
           </div>
           <div style="display:flex;gap:8px;">
-            <button class="btn ghost small" onclick="showServiceProvidersIntro()">Recruitment process</button>
             <button class="btn ghost small" id="spDefaultPricingBtn" onclick="openSPDefaultPricing()" style="display:none;">Manage default pricing</button>
             <button class="btn small" onclick="openServiceProviderDetail(null)">+ New service provider</button>
           </div>
@@ -1553,7 +1552,7 @@ function switchView(view){
   if(view==='pipeline') renderPipeline();
   if(view==='quotes') showQuoteList();
   if(view==='assets') renderAssets();
-  if(view==='serviceproviders') showServiceProvidersList();
+  if(view==='serviceproviders') showServiceProvidersIntro();
   if(view==='tasks') renderTasks();
   if(view!=='serviceproviders') updateAppHash({ view });
 }
