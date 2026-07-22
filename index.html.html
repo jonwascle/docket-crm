@@ -4177,7 +4177,7 @@ async function sendSPInfoPricingEmail(){
     const res = await fetch(SP_FUNCTIONS_URL + 'send-sp-recruitment-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ spEmail: sp.email, spName: sp.name, onboardingLink, pdfBase64 })
+      body: JSON.stringify({ spEmail: sp.email, spName: sp.name, staffName: currentProfile.name, onboardingLink, pdfBase64 })
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok || data.error){
