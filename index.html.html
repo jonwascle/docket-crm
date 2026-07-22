@@ -594,7 +594,27 @@
 
     <!-- ---------- SERVICE PROVIDERS VIEW ---------- -->
     <div id="view-serviceproviders" class="view">
-      <div id="spListMode">
+      <div id="spIntroMode">
+        <div class="view-header">
+          <div>
+            <p class="view-title">Service Providers</p>
+            <p class="view-sub">Everyone who collects waste on our behalf — how we find and bring on a new one.</p>
+          </div>
+          <button class="btn ghost small" onclick="showServiceProvidersList()">View all service providers →</button>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">How recruiting a new provider works</span></div>
+          <p style="font-size:13.5px;color:var(--ink-soft);">Start by adding the company as a <b>Prospect</b> — just their name and phone number is enough to begin with. From there, work through each stage on their <b>Recruitment</b> tab, in order:</p>
+          <div id="spIntroStagesList" style="margin:16px 0;"></div>
+          <p style="font-size:13.5px;color:var(--ink-soft);">Each stage shows what to do next — a call script, an email template, or a reminder — so you always know where you left off. If several people are working through providers, use the <b>Show</b> filter on the list to see who's at which stage.</p>
+          <p style="font-size:13.5px;color:var(--ink-soft);">If a company doesn't want to join, note why on their Recruitment tab — Docket will flag it if anyone tries to approach them again later.</p>
+        </div>
+
+        <button class="btn" onclick="openServiceProviderDetail(null)" style="margin-top:6px;">+ Add a new prospect</button>
+      </div>
+
+      <div id="spListMode" style="display:none;">
         <div class="view-header">
           <div>
             <p class="view-title">Service Providers</p>
@@ -1524,7 +1544,7 @@ function switchView(view){
   if(view==='quotes') showQuoteList();
   if(view==='onboarding') showOnboardingList();
   if(view==='assets') renderAssets();
-  if(view==='serviceproviders') showServiceProvidersList();
+  if(view==='serviceproviders') showServiceProvidersIntro();
   if(view==='tasks') renderTasks();
   if(view!=='serviceproviders') updateAppHash({ view });
 }
@@ -2922,7 +2942,23 @@ async function loadServiceProviders(){
   serviceProviders = data || [];
 }
 
+function showServiceProvidersIntro(){
+  document.getElementById('spIntroMode').style.display = 'block';
+  document.getElementById('spListMode').style.display = 'none';
+  document.getElementById('spDefaultPricingMode').style.display = 'none';
+  document.getElementById('spDetailMode').style.display = 'none';
+  currentSPId = null;
+  document.getElementById('spIntroStagesList').innerHTML = SP_RECRUITMENT_STAGES.map((s,i)=>
+    '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">'
+    + '<span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--paper-card-alt);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--slate);">'+(i+1)+'</span>'
+    + '<span style="font-size:13.5px;padding-top:2px;">'+escapeHtml(s.label)+'</span>'
+    + '</div>'
+  ).join('');
+  updateAppHash({ view:'serviceproviders' });
+}
+
 function showServiceProvidersList(){
+  document.getElementById('spIntroMode').style.display = 'none';
   document.getElementById('spListMode').style.display = 'block';
   document.getElementById('spDefaultPricingMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'none';
@@ -3024,6 +3060,7 @@ async function openServiceProviderDetail(id){
   document.getElementById('spCoverageMapWrap').style.display = 'none';
   document.getElementById('spCoverageMapToggleBtn').textContent = 'Show coverage map';
 
+  document.getElementById('spIntroMode').style.display = 'none';
   document.getElementById('spListMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'block';
   const defaultSPTab = (row && row.recruitment_stage === 'live') ? 'details' : 'recruitment';
@@ -3648,6 +3685,7 @@ async function openSPDefaultPricing(){
     return;
   }
   await loadSPDefaultPricing();
+  document.getElementById('spIntroMode').style.display = 'none';
   document.getElementById('spListMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'none';
   document.getElementById('spDefaultPricingMode').style.display = 'block';
