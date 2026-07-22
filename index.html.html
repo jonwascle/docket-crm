@@ -4880,13 +4880,28 @@ function renderCart(){
   let html = '';
   currentQuote.items.forEach(it=>{
     const unit = round2(it.basePrice * (1 + pct/100));
+    const svc = SERVICES.find(s=>s.name===it.name);
+    const canEditBasePrice = svc && (svc.editableByUser || svc.requiresManualPrice);
     html += '<div class="cart-item">';
     html += '<div class="cart-item-top"><span class="cart-item-name">'+escapeHtml(it.name)+'</span>'+
       '<span class="cart-item-remove" onclick="removeCartItem(\''+it.name.replace(/'/g,"\\'")+'\')">✕</span></div>';
-    html += '<div class="cart-item-bottom"><span class="cart-item-total">'+fmtMoney(unit)+'</span></div>';
+    if(canEditBasePrice){
+      html += '<div class="cart-item-bottom"><input class="price-input" type="number" step="0.01" value="'+it.basePrice+'" onchange="updateCartItemBasePrice(\''+it.name.replace(/'/g,"\\'")+'\', this.value)" style="width:100px;"> <span style="font-size:11.5px;color:var(--slate);">→ '+fmtMoney(unit)+' with adjustment</span></div>';
+    }else{
+      html += '<div class="cart-item-bottom"><span class="cart-item-total">'+fmtMoney(unit)+'</span></div>';
+    }
     html += '</div>';
   });
   container.innerHTML = html;
+}
+
+function updateCartItemBasePrice(name, value){
+  const price = Number(value);
+  if(isNaN(price) || price < 0) return;
+  const item = currentQuote.items.find(it=>it.name===name);
+  if(!item) return;
+  item.basePrice = price;
+  renderCart();
 }
 
 async function saveQuote(download){
@@ -4945,7 +4960,7 @@ async function loadQuoteDefaultPricing(){
   const { data, error } = await sb.from('quote_default_pricing').select('*').order('sort_order');
   if(error){ showToast('Could not load pricing catalogue: ' + error.message, true); return; }
   quoteDefaultPricingRows = data || [];
-  SERVICES = quoteDefaultPricingRows.map(r=>({ category: r.category, name: r.name, price: r.price, requiresManualPrice: r.requires_manual_price }));
+  SERVICES = quoteDefaultPricingRows.map(r=>({ category: r.category, name: r.name, price: r.price, requiresManualPrice: r.requires_manual_price, editableByUser: r.editable_by_user }));
 }
 
 
