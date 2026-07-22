@@ -581,7 +581,10 @@
         <div style="background:linear-gradient(135deg, var(--brass) 0%, #f0a51e 100%);border-radius:14px;padding:32px 36px;margin-bottom:24px;position:relative;overflow:hidden;">
           <p style="font-family:'Comfortaa',sans-serif;font-size:26px;font-weight:700;color:#1B1B1B;margin:0 0 6px;">Service Providers</p>
           <p style="font-size:14px;color:#3a2f0f;margin:0 0 20px;max-width:520px;">Everyone who collects waste on our behalf — and how we find and bring on a new one.</p>
-          <button class="btn ghost small" onclick="showServiceProvidersList()" style="background:rgba(255,255,255,0.85);border-color:transparent;">View all service providers →</button>
+          <div style="display:flex;gap:10px;">
+            <button class="btn" onclick="openServiceProviderDetail(null)" style="width:auto;">+ Add a new prospect</button>
+            <button class="btn ghost small" onclick="showServiceProvidersList()" style="background:rgba(255,255,255,0.85);border-color:transparent;">View all service providers →</button>
+          </div>
         </div>
 
         <div class="onboard-section" style="border-top:3px solid var(--brass);">
@@ -600,8 +603,6 @@
             </div>
           </div>
         </div>
-
-        <button class="btn" onclick="openServiceProviderDetail(null)" style="margin-top:6px;padding:12px 24px;">+ Add a new prospect</button>
       </div>
 
       <div id="spListMode" style="display:none;">
