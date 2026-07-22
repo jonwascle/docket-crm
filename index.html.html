@@ -4831,14 +4831,7 @@ function addServiceToCart(name){
     return;
   }
   if(svc.requiresManualPrice){
-    const entered = prompt('Haulage cost varies from site to site — enter the price for this quote (£):');
-    if(entered === null) return;
-    const manualPrice = Number(entered);
-    if(!entered.trim() || isNaN(manualPrice) || manualPrice <= 0){
-      showToast('Enter a valid price to add this line.', true);
-      return;
-    }
-    currentQuote.items.push({name:svc.name, category:svc.category, basePrice: manualPrice});
+    currentQuote.items.push({name:svc.name, category:svc.category, basePrice: 0});
   }else{
     currentQuote.items.push({name:svc.name, category:svc.category, basePrice:svc.price});
   }
@@ -4886,7 +4879,7 @@ function renderCart(){
     html += '<div class="cart-item-top"><span class="cart-item-name">'+escapeHtml(it.name)+'</span>'+
       '<span class="cart-item-remove" onclick="removeCartItem(\''+it.name.replace(/'/g,"\\'")+'\')">✕</span></div>';
     if(canEditBasePrice){
-      html += '<div class="cart-item-bottom"><input class="price-input" type="number" step="0.01" value="'+it.basePrice+'" onchange="updateCartItemBasePrice(\''+it.name.replace(/'/g,"\\'")+'\', this.value)" style="width:100px;"> <span style="font-size:11.5px;color:var(--slate);">→ '+fmtMoney(unit)+' with adjustment</span></div>';
+      html += '<div class="cart-item-bottom"><input class="price-input" type="number" step="0.01" value="'+it.basePrice+'" onchange="updateCartItemBasePrice(\''+it.name.replace(/'/g,"\\'")+'\', this.value)" style="width:100px;"></div>';
     }else{
       html += '<div class="cart-item-bottom"><span class="cart-item-total">'+fmtMoney(unit)+'</span></div>';
     }
@@ -4908,6 +4901,11 @@ async function saveQuote(download){
   currentQuote.contactId = document.getElementById('qContact').value || null;
   currentQuote.adjustmentPct = Number(document.getElementById('qAdjustment').value) || 0;
   if(currentQuote.items.length===0){ showToast('Add at least one service before saving.', true); return; }
+  const unpriced = currentQuote.items.find(it=>{
+    const svc = SERVICES.find(s=>s.name===it.name);
+    return svc && svc.requiresManualPrice && (!it.basePrice || it.basePrice <= 0);
+  });
+  if(unpriced){ showToast('Enter a price for ' + unpriced.name + ' before saving — it varies per site.', true); return; }
 
   const payload = {
     contact_id: currentQuote.contactId || null,
