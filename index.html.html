@@ -4160,7 +4160,7 @@ async function sendSPInfoPricingEmail(){
 
   try{
     await sb.from('sp_onboarding_links').delete().eq('service_provider_id', currentSPId);
-    const { data: linkRow, error: linkErr } = await sb.from('sp_onboarding_links').insert({ service_provider_id: currentSPId }).select().single();
+    const { data: linkRow, error: linkErr } = await sb.from('sp_onboarding_links').insert({ service_provider_id: currentSPId, created_by: currentUser.id }).select().single();
     if(linkErr){ showToast('Could not create onboarding link: ' + linkErr.message, true); return; }
     spOnboardingLinks = [linkRow];
     renderSPOnboardingLinkArea();
@@ -4193,7 +4193,7 @@ async function sendSPInfoPricingEmail(){
 async function generateSPOnboardingLink(){
   if(!currentSPId) return;
   await sb.from('sp_onboarding_links').delete().eq('service_provider_id', currentSPId);
-  const { data, error } = await sb.from('sp_onboarding_links').insert({ service_provider_id: currentSPId }).select().single();
+  const { data, error } = await sb.from('sp_onboarding_links').insert({ service_provider_id: currentSPId, created_by: currentUser.id }).select().single();
   if(error){ showToast('Could not create link: ' + error.message, true); return; }
   spOnboardingLinks = [data];
   renderSPOnboardingLinkArea();
@@ -5505,4 +5505,3 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
-
