@@ -4177,7 +4177,7 @@ async function sendSPInfoPricingEmail(){
     const res = await fetch(SP_FUNCTIONS_URL + 'send-sp-recruitment-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ spEmail: sp.email, spName: sp.name, staffName: currentProfile.name, onboardingLink, pdfBase64 })
+      body: JSON.stringify({ spEmail: sp.email, spName: sp.name, onboardingLink, pdfBase64 })
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok || data.error){
@@ -4583,7 +4583,7 @@ async function savePublicOnboardForm(isFinal){
   try{
     const res = await fetch(SP_FUNCTIONS_URL + 'sp-onboarding-submit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'submit', token: pubOnboardToken, company, teamMembers, wasteStations, documents, postcodeAreas: pubPostcodeAreas })
+      body: JSON.stringify({ action: 'submit', token: pubOnboardToken, isFinal, company, teamMembers, wasteStations, documents, postcodeAreas: pubPostcodeAreas })
     });
     const data = await res.json();
     if(!res.ok || data.error){
@@ -5505,3 +5505,4 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
+
