@@ -595,23 +595,28 @@
     <!-- ---------- SERVICE PROVIDERS VIEW ---------- -->
     <div id="view-serviceproviders" class="view">
       <div id="spIntroMode">
-        <div class="view-header">
-          <div>
-            <p class="view-title">Service Providers</p>
-            <p class="view-sub">Everyone who collects waste on our behalf — how we find and bring on a new one.</p>
-          </div>
-          <button class="btn ghost small" onclick="showServiceProvidersList()">View all service providers →</button>
+        <div style="background:linear-gradient(135deg, var(--brass) 0%, #f0a51e 100%);border-radius:14px;padding:32px 36px;margin-bottom:24px;position:relative;overflow:hidden;">
+          <p style="font-family:'Comfortaa',sans-serif;font-size:26px;font-weight:700;color:#1B1B1B;margin:0 0 6px;">Service Providers</p>
+          <p style="font-size:14px;color:#3a2f0f;margin:0 0 20px;max-width:520px;">Everyone who collects waste on our behalf — and how we find and bring on a new one.</p>
+          <button class="btn ghost small" onclick="showServiceProvidersList()" style="background:rgba(255,255,255,0.85);border-color:transparent;">View all service providers →</button>
         </div>
 
-        <div class="onboard-section">
+        <div class="onboard-section" style="border-top:3px solid var(--brass);">
           <div class="onboard-section-head"><span class="onboard-section-title">How recruiting a new provider works</span></div>
           <p style="font-size:13.5px;color:var(--ink-soft);">Start by adding the company as a <b>Prospect</b> — just their name and phone number is enough to begin with. From there, work through each stage on their <b>Recruitment</b> tab, in order:</p>
-          <div id="spIntroStagesList" style="margin:16px 0;"></div>
-          <p style="font-size:13.5px;color:var(--ink-soft);">Each stage shows what to do next — a call script, an email template, or a reminder — so you always know where you left off. If several people are working through providers, use the <b>Show</b> filter on the list to see who's at which stage.</p>
-          <p style="font-size:13.5px;color:var(--ink-soft);">If a company doesn't want to join, note why on their Recruitment tab — Docket will flag it if anyone tries to approach them again later.</p>
+          <div id="spIntroStagesList" style="margin:20px 4px;"></div>
+
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:20px;">
+            <div class="script-box" style="flex:1;min-width:260px;margin:0;">
+              <b style="color:var(--brass);">Working as a team:</b> each stage shows what to do next — a call script, an email template, or a reminder — so you always know where you left off. If several people are recruiting at once, use the <b>Show</b> filter on the list to see who's at which stage.
+            </div>
+            <div class="script-box" style="flex:1;min-width:260px;margin:0;border-left-color:var(--stamp-red);">
+              <b style="color:var(--stamp-red);">If they say no:</b> note why on their Recruitment tab. Docket will flag it clearly if anyone tries to approach that same company again later.
+            </div>
+          </div>
         </div>
 
-        <button class="btn" onclick="openServiceProviderDetail(null)" style="margin-top:6px;">+ Add a new prospect</button>
+        <button class="btn" onclick="openServiceProviderDetail(null)" style="margin-top:6px;padding:12px 24px;">+ Add a new prospect</button>
       </div>
 
       <div id="spListMode" style="display:none;">
@@ -2949,12 +2954,16 @@ function showServiceProvidersIntro(){
   document.getElementById('spDefaultPricingMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'none';
   currentSPId = null;
-  document.getElementById('spIntroStagesList').innerHTML = SP_RECRUITMENT_STAGES.map((s,i)=>
-    '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">'
-    + '<span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--paper-card-alt);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--slate);">'+(i+1)+'</span>'
-    + '<span style="font-size:13.5px;padding-top:2px;">'+escapeHtml(s.label)+'</span>'
-    + '</div>'
-  ).join('');
+  document.getElementById('spIntroStagesList').innerHTML = SP_RECRUITMENT_STAGES.map((s,i)=>{
+    const isLast = i === SP_RECRUITMENT_STAGES.length - 1;
+    return '<div style="display:flex;gap:14px;align-items:flex-start;">'
+      + '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">'
+      + '<span style="width:26px;height:26px;border-radius:50%;background:var(--brass);color:#1B1B1B;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.12);">'+(i+1)+'</span>'
+      + (isLast ? '' : '<div style="width:2px;flex:1;min-height:22px;background:var(--border);"></div>')
+      + '</div>'
+      + '<span style="font-size:13.5px;font-weight:600;color:var(--ink);padding-top:4px;padding-bottom:'+(isLast?'0':'18')+'px;">'+escapeHtml(s.label)+'</span>'
+      + '</div>';
+  }).join('');
   updateAppHash({ view:'serviceproviders' });
 }
 
