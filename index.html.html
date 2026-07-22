@@ -323,7 +323,6 @@
     <div class="nav-item" data-view="organisations" onclick="switchView('organisations')">Organisations</div>
     <div class="nav-item" data-view="pipeline" onclick="switchView('pipeline')">Pipeline</div>
     <div class="nav-item" data-view="quotes" onclick="switchView('quotes')">Quotes</div>
-    <div class="nav-item" data-view="onboarding" onclick="switchView('onboarding')">Onboarding</div>
     <div class="nav-item" data-view="assets" onclick="switchView('assets')">Assets</div>
     <div class="nav-item" data-view="serviceproviders" onclick="switchView('serviceproviders')">Service Providers</div>
     <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">Tasks</div>
@@ -357,7 +356,7 @@
             <p class="view-title">Organisations</p>
             <p class="view-sub">Every organisation in Docket — contacts, tasks, and onboarding status all in one place.</p>
           </div>
-          <button class="btn small" onclick="createNewOrganisationFromOrgPage()">+ New organisation</button>
+          <button class="btn small" onclick="openOrganisationDetail(null)">+ New organisation</button>
         </div>
         <input class="search-input" id="organisationsSearch" placeholder="Search by organisation name" oninput="renderOrganisationsList()">
         <div id="organisationsListContainer"></div>
@@ -375,9 +374,74 @@
           </div>
         </div>
 
+        <div class="onboard-progress" id="onboardingProgressBar">
+          <span id="onboardingProgressText">0 of 18 fields complete</span>
+          <div class="onboard-progress-bar"><div class="onboard-progress-fill" id="onboardingProgressFill" style="width:0%;"></div></div>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate);margin-bottom:10px;cursor:pointer;">
+          <input type="checkbox" id="onboardingNotifyWapp" checked> Send onboarding summary to operations &amp; finance (for Wapp setup)
+        </label>
+        <button class="btn ghost" onclick="toggleOnboardingLive()" style="width:100%;justify-content:center;margin-bottom:18px;" id="onboardingLiveBtn">Mark as live customer</button>
+        <div id="onboardingMissingFieldsBanner" class="missing-fields-banner" style="display:none;"></div>
+        <div id="onboardingPdfArea" style="margin-bottom:18px;"></div>
+
         <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Details</span><button class="btn ghost small" onclick="editOrgFromOrgPage()">Edit details</button></div>
-          <div id="orgDetailSummary"></div>
+          <div class="onboard-section-head"><span class="onboard-section-title">Organisation detail</span><span class="onboard-badge" id="badgeOrgDetail"></span></div>
+          <div class="field"><label>Customer name</label><input id="obCustomerName" oninput="updateOnboardingProgress()"></div>
+          <div class="field"><label>Address line 1</label><input id="obAddr1" oninput="updateOnboardingProgress()"></div>
+          <div class="field"><label>Address line 2</label><input id="obAddr2"></div>
+          <div class="field-row">
+            <div class="field"><label>City</label><input id="obCity" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>County</label><input id="obCounty" oninput="updateOnboardingProgress()"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Postcode</label><input id="obPostcode" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Website</label><input id="obWebsite" oninput="updateOnboardingProgress()"></div>
+          </div>
+          <div class="field"><label>Builders merchant (optional)</label>
+            <select id="obBuildersMerchantId" onchange="updateOnboardingProgress()"><option value="">— Select builders merchant —</option></select>
+            <p style="font-size:12px;color:var(--slate);margin:4px 0 0;">If this customer came via a builders merchant, link them here.</p>
+          </div>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Contact detail</span><span class="onboard-badge" id="badgeContactDetail"></span></div>
+          <div class="field-row">
+            <div class="field"><label>First name</label><input id="obContactFirst" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Last name</label><input id="obContactLast" oninput="updateOnboardingProgress()"></div>
+          </div>
+          <div class="field"><label>Job position</label><input id="obContactJob" oninput="updateOnboardingProgress()"></div>
+          <div class="field-row">
+            <div class="field"><label>Telephone</label><input id="obContactPhone" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Email</label><input id="obContactEmail" oninput="updateOnboardingProgress()"></div>
+          </div>
+          <div class="field checkbox-field"><label><input type="checkbox" id="obContactWTN"> Send waste transfer note</label></div>
+          <div class="field"><label>Additional email for waste transfer notes</label><input id="obContactWTNEmail"></div>
+        </div>
+
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Finance detail</span><span class="onboard-badge" id="badgeFinanceDetail"></span></div>
+          <div class="field-row">
+            <div class="field"><label>First name</label><input id="obFinanceFirst" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Last name</label><input id="obFinanceLast" oninput="updateOnboardingProgress()"></div>
+          </div>
+          <div class="field"><label>Job position</label><input id="obFinanceJob" oninput="updateOnboardingProgress()"></div>
+          <div class="field-row">
+            <div class="field"><label>Telephone</label><input id="obFinancePhone" oninput="updateOnboardingProgress()"></div>
+            <div class="field"><label>Email</label><input id="obFinanceEmail" oninput="updateOnboardingProgress()"></div>
+          </div>
+          <div class="field checkbox-field"><label><input type="checkbox" id="obFinanceWTN"> Send waste transfer note</label></div>
+          <div class="field"><label>Additional email for invoices</label><input id="obFinanceInvoiceEmail"></div>
+        </div>
+
+        <div class="field"><label>Notes</label><textarea id="obNotes"></textarea></div>
+
+        <div class="modal-actions" style="max-width:none;margin:0 0 20px;">
+          <span></span>
+          <div class="right">
+            <button class="btn small" onclick="saveOnboarding()">Save</button>
+          </div>
         </div>
 
         <div class="onboard-section">
@@ -470,105 +534,6 @@
       </div>
     </div>
 
-    <!-- ---------- ONBOARDING VIEW ---------- -->
-    <div id="view-onboarding" class="view">
-      <div id="onboardingListMode">
-        <div class="view-header">
-          <div>
-            <p class="view-title">Onboarding</p>
-            <p class="view-sub">Customer profiles, filled in over time until they go live.</p>
-          </div>
-          <button class="btn small" onclick="openOnboardingDetail()">+ New customer</button>
-        </div>
-        <input class="search-input" id="onboardingSearch" placeholder="Search by customer name" oninput="renderOnboardingList()">
-        <div id="onboardingListContainer"></div>
-      </div>
-
-      <div id="onboardingDetailMode" style="display:none;">
-        <div class="view-header">
-          <div>
-            <p class="view-title"><span id="onboardingDetailTitle">New customer</span><span id="onboardingLiveBadge" class="live-badge" style="display:none;">LIVE CUSTOMER</span></p>
-          </div>
-          <button class="btn ghost small" onclick="showOnboardingList()">← Back</button>
-        </div>
-
-        <div class="onboard-progress" id="onboardingProgressBar">
-          <span id="onboardingProgressText">0 of 17 fields complete</span>
-          <div class="onboard-progress-bar"><div class="onboard-progress-fill" id="onboardingProgressFill" style="width:0%;"></div></div>
-        </div>
-
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate);margin-bottom:10px;cursor:pointer;">
-          <input type="checkbox" id="onboardingNotifyWapp" checked> Send onboarding summary to operations &amp; finance (for Wapp setup)
-        </label>
-        <button class="btn ghost" onclick="toggleOnboardingLive()" style="width:100%;justify-content:center;margin-bottom:18px;" id="onboardingLiveBtn">Mark as live customer</button>
-        <div id="onboardingMissingFieldsBanner" class="missing-fields-banner" style="display:none;"></div>
-        <div id="onboardingPdfArea" style="margin-bottom:18px;"></div>
-
-        <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Tasks for this organisation</span><button class="btn ghost small" onclick="openTaskModal(null, {organisationId: currentOnboardingOrgId})" id="onboardingAddTaskBtn" style="display:none;">+ Add task</button></div>
-          <div id="onboardingOrgTasksList"></div>
-        </div>
-
-        <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Organisation detail</span><span class="onboard-badge" id="badgeOrgDetail"></span></div>
-          <div class="field"><label>Customer name</label><input id="obCustomerName" oninput="updateOnboardingProgress()"></div>
-          <div class="field"><label>Address line 1</label><input id="obAddr1" oninput="updateOnboardingProgress()"></div>
-          <div class="field"><label>Address line 2</label><input id="obAddr2"></div>
-          <div class="field-row">
-            <div class="field"><label>City</label><input id="obCity" oninput="updateOnboardingProgress()"></div>
-            <div class="field"><label>County</label><input id="obCounty" oninput="updateOnboardingProgress()"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Postcode</label><input id="obPostcode" oninput="updateOnboardingProgress()"></div>
-            <div class="field"><label>Website</label><input id="obWebsite" oninput="updateOnboardingProgress()"></div>
-          </div>
-          <div class="field"><label>Builders merchant (optional)</label>
-            <select id="obBuildersMerchantId" onchange="updateOnboardingProgress()"><option value="">— Select builders merchant —</option></select>
-            <p style="font-size:12px;color:var(--slate);margin:4px 0 0;">If this customer came via a builders merchant, link them here.</p>
-          </div>
-        </div>
-
-        <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Contact detail</span><span class="onboard-badge" id="badgeContactDetail"></span></div>
-          <div class="field-row">
-            <div class="field"><label>First name</label><input id="obContactFirst" oninput="updateOnboardingProgress()"></div>
-            <div class="field"><label>Last name</label><input id="obContactLast" oninput="updateOnboardingProgress()"></div>
-          </div>
-          <div class="field"><label>Job position</label><input id="obContactJob" oninput="updateOnboardingProgress()"></div>
-          <div class="field-row">
-            <div class="field"><label>Telephone</label><input id="obContactPhone" oninput="updateOnboardingProgress()"></div>
-            <div class="field"><label>Email</label><input id="obContactEmail" oninput="updateOnboardingProgress()"></div>
-          </div>
-          <div class="field checkbox-field"><label><input type="checkbox" id="obContactWTN"> Send waste transfer note</label></div>
-          <div class="field"><label>Additional email for waste transfer notes</label><input id="obContactWTNEmail"></div>
-        </div>
-
-        <div class="onboard-section">
-          <div class="onboard-section-head"><span class="onboard-section-title">Finance detail</span><span class="onboard-badge" id="badgeFinanceDetail"></span></div>
-          <div class="field-row">
-            <div class="field"><label>First name</label><input id="obFinanceFirst" oninput="updateOnboardingProgress()"></div>
-            <div class="field"><label>Last name</label><input id="obFinanceLast" oninput="updateOnboardingProgress()"></div>
-          </div>
-          <div class="field"><label>Job position</label><input id="obFinanceJob" oninput="updateOnboardingProgress()"></div>
-          <div class="field-row">
-            <div class="field"><label>Telephone</label><input id="obFinancePhone" oninput="updateOnboardingProgress()"></div>
-            <div class="field"><label>Email</label><input id="obFinanceEmail" oninput="updateOnboardingProgress()"></div>
-          </div>
-          <div class="field checkbox-field"><label><input type="checkbox" id="obFinanceWTN"> Send waste transfer note</label></div>
-          <div class="field"><label>Additional email for invoices</label><input id="obFinanceInvoiceEmail"></div>
-        </div>
-
-        <div class="field"><label>Notes</label><textarea id="obNotes"></textarea></div>
-
-        <div class="modal-actions" style="max-width:none;margin:0 0 30px;">
-          <span></span>
-          <div class="right">
-            <button class="btn ghost small" onclick="showOnboardingList()">Cancel</button>
-            <button class="btn small" onclick="saveOnboarding()">Save progress</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- ---------- ASSETS VIEW ---------- -->
     <div id="view-assets" class="view">
@@ -1489,7 +1454,7 @@ async function restoreAppViewFromHash(){
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const view = params.get('view');
   if(!view) return;
-  const validViews = ['contacts','organisations','pipeline','quotes','onboarding','assets','serviceproviders','tasks','team'];
+  const validViews = ['contacts','organisations','pipeline','quotes','assets','serviceproviders','tasks','team'];
   if(!validViews.includes(view)) return;
   switchView(view);
   if(view === 'serviceproviders'){
@@ -1543,7 +1508,6 @@ function switchView(view){
   document.getElementById('view-organisations').classList.toggle('active', view==='organisations');
   document.getElementById('view-pipeline').classList.toggle('active', view==='pipeline');
   document.getElementById('view-quotes').classList.toggle('active', view==='quotes');
-  document.getElementById('view-onboarding').classList.toggle('active', view==='onboarding');
   document.getElementById('view-assets').classList.toggle('active', view==='assets');
   document.getElementById('view-serviceproviders').classList.toggle('active', view==='serviceproviders');
   document.getElementById('view-tasks').classList.toggle('active', view==='tasks');
@@ -1552,7 +1516,6 @@ function switchView(view){
   if(view==='organisations') showOrganisationsList();
   if(view==='pipeline') renderPipeline();
   if(view==='quotes') showQuoteList();
-  if(view==='onboarding') showOnboardingList();
   if(view==='assets') renderAssets();
   if(view==='serviceproviders') showServiceProvidersList();
   if(view==='tasks') renderTasks();
@@ -1912,7 +1875,6 @@ const ONBOARDING_FIELD_LABELS = {
   financeFirstName:'Finance detail — First name', financeLastName:'Finance detail — Last name', financeJobTitle:'Finance detail — Job position',
   financePhone:'Finance detail — Telephone', financeEmail:'Finance detail — Email'
 };
-let currentOnboardingOrgId = null;
 let currentOrgPageOrgId = null;
 
 function computeMissingOnboardingFields(values){
@@ -1923,12 +1885,6 @@ function onboardingProgress(org){
   const filled = ONBOARDING_FIELDS.filter(f=>org[f] && String(org[f]).trim()).length;
   const total = ONBOARDING_FIELDS.length;
   return { filled, total, pct: Math.round((filled/total)*100) };
-}
-
-function showOnboardingList(){
-  document.getElementById('onboardingListMode').style.display = 'block';
-  document.getElementById('onboardingDetailMode').style.display = 'none';
-  renderOnboardingList();
 }
 
 /* ---------- Organisations page (browse orgs, see contacts + tasks together) ---------- */
@@ -2052,16 +2008,18 @@ function renderOrganisationsList(){
 }
 
 function openOrganisationDetail(orgId){
-  currentOrgPageOrgId = orgId;
-  const row = organisations.find(o=>o.id===orgId);
-  if(!row) return;
-  document.getElementById('orgDetailTitle').textContent = row.name;
-  document.getElementById('orgDetailLiveBadge').style.display = row.onboarding_status==='live' ? 'inline-block' : 'none';
-  document.getElementById('orgDetailSub').textContent = row.onboarding_status==='live' ? 'Live customer' : 'Currently onboarding';
-  document.getElementById('deleteOrgBtn').style.display = currentProfile.role === 'admin' ? 'inline-flex' : 'none';
+  currentOrgPageOrgId = orgId || null;
+  const row = orgId ? organisations.find(o=>o.id===orgId) : null;
+  if(orgId && !row) return;
+  const org = row ? orgRowToCamel(row) : {};
 
-  document.getElementById('orgIsBuildersMerchant').checked = !!row.is_builders_merchant;
-  document.getElementById('orgBuildersMerchantLinksArea').style.display = row.is_builders_merchant ? 'block' : 'none';
+  document.getElementById('orgDetailTitle').textContent = row ? row.name : 'New organisation';
+  document.getElementById('orgDetailLiveBadge').style.display = (row && row.onboarding_status==='live') ? 'inline-block' : 'none';
+  document.getElementById('orgDetailSub').textContent = row ? (row.onboarding_status==='live' ? 'Live customer' : 'Currently onboarding') : 'Not saved yet';
+  document.getElementById('deleteOrgBtn').style.display = (row && currentProfile.role === 'admin') ? 'inline-flex' : 'none';
+
+  document.getElementById('orgIsBuildersMerchant').checked = !!(row && row.is_builders_merchant);
+  document.getElementById('orgBuildersMerchantLinksArea').style.display = (row && row.is_builders_merchant) ? 'block' : 'none';
   document.getElementById('orgLinkedCustomerOptions').innerHTML = organisations
     .filter(o=>o.id!==orgId)
     .map(o=>'<option value="'+escapeHtml(o.name)+'">').join('');
@@ -2069,15 +2027,50 @@ function openOrganisationDetail(orgId){
   renderOrgLinkedCustomersList();
   renderOrgSuppliedVia();
 
-  const summaryParts = [];
-  const address = [row.address_line1, row.address_line2, row.city, row.county, row.postcode].filter(Boolean).join(', ');
-  if(address) summaryParts.push('<div><b>Address:</b> '+escapeHtml(address)+'</div>');
-  if(row.phone) summaryParts.push('<div><b>Phone:</b> '+escapeHtml(row.phone)+'</div>');
-  if(row.website) summaryParts.push('<div><b>Website:</b> '+escapeHtml(row.website)+'</div>');
-  if(row.notes) summaryParts.push('<div><b>Notes:</b> '+escapeHtml(row.notes)+'</div>');
-  document.getElementById('orgDetailSummary').innerHTML = summaryParts.length
-    ? summaryParts.join('<div style="margin-top:6px;"></div>')
-    : '<p style="color:var(--slate);font-size:13px;">No details added yet. Click "Edit details" to fill these in.</p>';
+  // ---- Onboarding-style form fields (organisation, contact, finance detail) ----
+  renderOnboardingPdfArea(row);
+
+  document.getElementById('obCustomerName').value = org.name || '';
+  document.getElementById('obAddr1').value = org.addressLine1 || '';
+  document.getElementById('obAddr2').value = org.addressLine2 || '';
+  document.getElementById('obCity').value = org.city || '';
+  document.getElementById('obCounty').value = org.county || '';
+  document.getElementById('obPostcode').value = org.postcode || '';
+  document.getElementById('obWebsite').value = org.website || '';
+
+  const bmSel = document.getElementById('obBuildersMerchantId');
+  bmSel.innerHTML = '<option value="">— Select builders merchant —</option>' +
+    organisations.filter(o=>o.is_builders_merchant && o.id!==orgId).slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(o=>'<option value="'+o.id+'">'+escapeHtml(o.name)+'</option>').join('');
+  bmSel.value = '';
+  if(orgId){
+    const existingLink = organisationLinks.find(l=>l.linked_organisation_id===orgId);
+    if(existingLink) bmSel.value = existingLink.builders_merchant_id;
+  }
+
+  document.getElementById('obContactFirst').value = org.contactFirstName || '';
+  document.getElementById('obContactLast').value = org.contactLastName || '';
+  document.getElementById('obContactJob').value = org.contactJobTitle || '';
+  document.getElementById('obContactPhone').value = org.contactPhone || '';
+  document.getElementById('obContactEmail').value = org.contactEmail || '';
+  document.getElementById('obContactWTN').checked = !!org.contactSendWTN;
+  document.getElementById('obContactWTNEmail').value = org.contactWTNEmail || '';
+
+  document.getElementById('obFinanceFirst').value = org.financeFirstName || '';
+  document.getElementById('obFinanceLast').value = org.financeLastName || '';
+  document.getElementById('obFinanceJob').value = org.financeJobTitle || '';
+  document.getElementById('obFinancePhone').value = org.financePhone || '';
+  document.getElementById('obFinanceEmail').value = org.financeEmail || '';
+  document.getElementById('obFinanceWTN').checked = !!org.financeSendWTN;
+  document.getElementById('obFinanceInvoiceEmail').value = org.financeInvoiceEmail || '';
+
+  document.getElementById('obNotes').value = org.notes || '';
+
+  document.getElementById('onboardingMissingFieldsBanner').style.display = 'none';
+  Object.values(ONBOARDING_FIELD_INPUT_IDS).forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.classList.remove('field-invalid');
+  });
 
   renderOrgContactsSection(orgId);
   renderOrgQuotesSection(orgId);
@@ -2085,6 +2078,7 @@ function openOrganisationDetail(orgId){
 
   document.getElementById('organisationsListMode').style.display = 'none';
   document.getElementById('organisationDetailMode').style.display = 'block';
+  updateOnboardingProgress();
 }
 
 function renderOrgContactsSection(orgId){
@@ -2137,17 +2131,6 @@ function addQuoteForCurrentOrg(){
   openQuoteBuilder(null, orgContacts.length===1 ? orgContacts[0].id : null);
 }
 
-function editOrgFromOrgPage(){
-  if(!currentOrgPageOrgId) return;
-  switchView('onboarding');
-  openOnboardingDetail(currentOrgPageOrgId);
-}
-
-function createNewOrganisationFromOrgPage(){
-  switchView('onboarding');
-  openOnboardingDetail(null);
-}
-
 function addContactForCurrentOrg(){
   if(!currentOrgPageOrgId) return;
   openContactModal();
@@ -2161,86 +2144,6 @@ function addContactForCurrentOrg(){
 function addTaskForCurrentOrg(){
   if(!currentOrgPageOrgId) return;
   openTaskModal(null, { organisationId: currentOrgPageOrgId });
-}
-
-function renderOnboardingList(){
-  const q = (document.getElementById('onboardingSearch').value || '').toLowerCase();
-  const container = document.getElementById('onboardingListContainer');
-  const filtered = organisations.filter(o=>!q || o.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
-  if(filtered.length===0){
-    container.innerHTML = '<div class="empty-state">' + (organisations.length===0 ? 'No customers yet. Add your first one.' : 'No customers match that search.') + '</div>';
-    return;
-  }
-  let html = '<table class="qtable"><thead><tr><th>Customer</th><th>Progress</th><th>Status</th></tr></thead><tbody>';
-  filtered.forEach(row=>{
-    const o = orgRowToCamel(row);
-    const p = onboardingProgress(o);
-    const isLive = o.onboardingStatus === 'live';
-    html += '<tr onclick="openOnboardingDetail(\''+o.id+'\')" style="cursor:pointer;">';
-    html += '<td><b>'+escapeHtml(o.name)+'</b></td>';
-    html += '<td>'+p.filled+' / '+p.total+' ('+p.pct+'%)</td>';
-    html += '<td>'+(isLive ? '<span class="live-badge">LIVE</span>' : '<span class="onboard-badge">Onboarding</span>')+'</td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  container.innerHTML = html;
-}
-
-function openOnboardingDetail(orgId){
-  currentOnboardingOrgId = orgId || null;
-  const row = orgId ? organisations.find(o=>o.id===orgId) : null;
-  const org = row ? orgRowToCamel(row) : {};
-  document.getElementById('onboardingDetailTitle').textContent = row ? 'Edit customer' : 'New customer';
-  document.getElementById('onboardingLiveBadge').style.display = (org.onboardingStatus==='live') ? 'inline-block' : 'none';
-  renderOnboardingPdfArea(row);
-
-  document.getElementById('obCustomerName').value = org.name || '';
-  document.getElementById('obAddr1').value = org.addressLine1 || '';
-  document.getElementById('obAddr2').value = org.addressLine2 || '';
-  document.getElementById('obCity').value = org.city || '';
-  document.getElementById('obCounty').value = org.county || '';
-  document.getElementById('obPostcode').value = org.postcode || '';
-  document.getElementById('obWebsite').value = org.website || '';
-
-  const bmSel = document.getElementById('obBuildersMerchantId');
-  bmSel.innerHTML = '<option value="">— Select builders merchant —</option>' +
-    organisations.filter(o=>o.is_builders_merchant && o.id!==orgId).slice().sort((a,b)=>a.name.localeCompare(b.name))
-      .map(o=>'<option value="'+o.id+'">'+escapeHtml(o.name)+'</option>').join('');
-  bmSel.value = '';
-  if(orgId){
-    const existingLink = organisationLinks.find(l=>l.linked_organisation_id===orgId);
-    if(existingLink) bmSel.value = existingLink.builders_merchant_id;
-  }
-
-  document.getElementById('obContactFirst').value = org.contactFirstName || '';
-  document.getElementById('obContactLast').value = org.contactLastName || '';
-  document.getElementById('obContactJob').value = org.contactJobTitle || '';
-  document.getElementById('obContactPhone').value = org.contactPhone || '';
-  document.getElementById('obContactEmail').value = org.contactEmail || '';
-  document.getElementById('obContactWTN').checked = !!org.contactSendWTN;
-  document.getElementById('obContactWTNEmail').value = org.contactWTNEmail || '';
-
-  document.getElementById('obFinanceFirst').value = org.financeFirstName || '';
-  document.getElementById('obFinanceLast').value = org.financeLastName || '';
-  document.getElementById('obFinanceJob').value = org.financeJobTitle || '';
-  document.getElementById('obFinancePhone').value = org.financePhone || '';
-  document.getElementById('obFinanceEmail').value = org.financeEmail || '';
-  document.getElementById('obFinanceWTN').checked = !!org.financeSendWTN;
-  document.getElementById('obFinanceInvoiceEmail').value = org.financeInvoiceEmail || '';
-
-  document.getElementById('obNotes').value = org.notes || '';
-
-  document.getElementById('onboardingMissingFieldsBanner').style.display = 'none';
-  Object.values(ONBOARDING_FIELD_INPUT_IDS).forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.classList.remove('field-invalid');
-  });
-
-  document.getElementById('onboardingListMode').style.display = 'none';
-  document.getElementById('onboardingDetailMode').style.display = 'block';
-  document.getElementById('onboardingAddTaskBtn').style.display = orgId ? 'inline-flex' : 'none';
-  renderOrgTasksInOnboarding(orgId);
-  updateOnboardingProgress();
 }
 
 function collectOnboardingFormValues(){
@@ -2288,26 +2191,25 @@ async function saveOnboarding(){
   const values = collectOnboardingFormValues();
   if(!values.name){ showToast('Customer name is required.', true); return; }
   let onboardingStatus = 'onboarding';
-  const existing = currentOnboardingOrgId ? organisations.find(o=>o.id===currentOnboardingOrgId) : null;
+  const existing = currentOrgPageOrgId ? organisations.find(o=>o.id===currentOrgPageOrgId) : null;
   if(existing && existing.onboarding_status==='live'){
     const stillQualifies = computeMissingOnboardingFields(values).length === 0;
     onboardingStatus = stillQualifies ? 'live' : 'onboarding';
   }
   const row = camelToOrgRow({...values, onboardingStatus});
-  let error, orgId = currentOnboardingOrgId;
-  if(currentOnboardingOrgId){
-    ({ error } = await sb.from('organisations').update(row).eq('id', currentOnboardingOrgId));
+  let error, orgId = currentOrgPageOrgId;
+  if(currentOrgPageOrgId){
+    ({ error } = await sb.from('organisations').update(row).eq('id', currentOrgPageOrgId));
   }else{
     const res = await sb.from('organisations').insert(row).select().single();
     error = res.error;
     if(res.data) orgId = res.data.id;
   }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
-  currentOnboardingOrgId = orgId;
   await saveBuildersMerchantLinkForOrg(orgId);
   await loadOrganisations();
-  showToast('Onboarding progress saved.');
-  showOnboardingList();
+  showToast('Saved.');
+  openOrganisationDetail(orgId);
 }
 
 async function saveBuildersMerchantLinkForOrg(orgId){
@@ -2321,19 +2223,19 @@ async function saveBuildersMerchantLinkForOrg(orgId){
 async function toggleOnboardingLive(){
   const values = collectOnboardingFormValues();
   if(!values.name){ showToast('Customer name is required.', true); return; }
-  const existing = currentOnboardingOrgId ? organisations.find(o=>o.id===currentOnboardingOrgId) : null;
+  const existing = currentOrgPageOrgId ? organisations.find(o=>o.id===currentOrgPageOrgId) : null;
   const banner = document.getElementById('onboardingMissingFieldsBanner');
 
   if(existing && existing.onboarding_status === 'live'){
     const row = camelToOrgRow({...values, onboardingStatus:'onboarding'});
     let error;
-    if(currentOnboardingOrgId){ ({ error } = await sb.from('organisations').update(row).eq('id', currentOnboardingOrgId)); }
-    else{ ({ data: { id: currentOnboardingOrgId } = {}, error } = await sb.from('organisations').insert(row).select().single()); }
+    if(currentOrgPageOrgId){ ({ error } = await sb.from('organisations').update(row).eq('id', currentOrgPageOrgId)); }
+    else{ ({ data: { id: currentOrgPageOrgId } = {}, error } = await sb.from('organisations').insert(row).select().single()); }
     if(error){ showToast('Could not save: ' + error.message, true); return; }
-    await saveBuildersMerchantLinkForOrg(currentOnboardingOrgId);
+    await saveBuildersMerchantLinkForOrg(currentOrgPageOrgId);
     await loadOrganisations();
     banner.style.display = 'none';
-    document.getElementById('onboardingLiveBadge').style.display = 'none';
+    document.getElementById('orgDetailLiveBadge').style.display = 'none';
     showToast('Moved back to onboarding.');
     updateOnboardingProgress();
     return;
@@ -2347,16 +2249,16 @@ async function toggleOnboardingLive(){
     }
   }
   const row = camelToOrgRow({...values, onboardingStatus: missingKeys.length===0 ? 'live' : 'onboarding'});
-  let error, newId = currentOnboardingOrgId;
-  if(currentOnboardingOrgId){
-    ({ error } = await sb.from('organisations').update(row).eq('id', currentOnboardingOrgId));
+  let error, newId = currentOrgPageOrgId;
+  if(currentOrgPageOrgId){
+    ({ error } = await sb.from('organisations').update(row).eq('id', currentOrgPageOrgId));
   }else{
     const res = await sb.from('organisations').insert(row).select().single();
     error = res.error;
     if(res.data) newId = res.data.id;
   }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
-  currentOnboardingOrgId = newId;
+  currentOrgPageOrgId = newId;
   await saveBuildersMerchantLinkForOrg(newId);
   await loadOrganisations();
 
@@ -2372,7 +2274,7 @@ async function toggleOnboardingLive(){
     showToast('Fill in the highlighted fields before this customer can go live.', true);
   }else{
     banner.style.display = 'none';
-    document.getElementById('onboardingLiveBadge').style.display = 'inline-block';
+    document.getElementById('orgDetailLiveBadge').style.display = 'inline-block';
     showToast('Marked as a live customer.');
     if(willNotify){
       generateAndSendOnboardingPdf({ ...row, id: newId });
@@ -2393,7 +2295,7 @@ function renderOnboardingPdfArea(row){
 }
 
 async function downloadOnboardingSummaryPdf(){
-  const row = currentOnboardingOrgId ? organisations.find(o=>o.id===currentOnboardingOrgId) : null;
+  const row = currentOrgPageOrgId ? organisations.find(o=>o.id===currentOrgPageOrgId) : null;
   if(!row || !row.onboarding_pdf_path){ showToast('No summary PDF has been generated for this customer yet.', true); return; }
   const { data, error } = await sb.storage.from('organisation-onboarding-pdfs').createSignedUrl(row.onboarding_pdf_path, 60);
   if(error){ showToast('Could not open the PDF: ' + error.message, true); return; }
@@ -2425,7 +2327,7 @@ async function generateAndSendOnboardingPdf(org){
     }
     await sb.from('organisations').update({ onboarding_pdf_path: path, onboarding_pdf_generated_at: new Date().toISOString() }).eq('id', org.id);
     await loadOrganisations();
-    if(currentOnboardingOrgId === org.id){
+    if(currentOrgPageOrgId === org.id){
       const updatedRow = organisations.find(o=>o.id===org.id);
       renderOnboardingPdfArea(updatedRow);
     }
@@ -4550,10 +4452,6 @@ function renderTasks(){
 }
 
 function refreshOrgTasksSectionIfVisible(){
-  const detailVisible = document.getElementById('onboardingDetailMode').style.display !== 'none';
-  if(detailVisible && currentOnboardingOrgId){
-    renderOrgTasksInOnboarding(currentOnboardingOrgId);
-  }
   const orgPageDetailVisible = document.getElementById('organisationDetailMode').style.display !== 'none';
   if(orgPageDetailVisible && currentOrgPageOrgId){
     renderTasksForOrgInto(currentOrgPageOrgId, 'orgDetailTasks');
@@ -4581,10 +4479,6 @@ function renderTasksForOrgInto(orgId, containerId){
     html += '</div>';
   });
   container.innerHTML = html;
-}
-
-function renderOrgTasksInOnboarding(orgId){
-  renderTasksForOrgInto(orgId, 'onboardingOrgTasksList');
 }
 
 function populateTaskAssigneeDropdown(selectedId){
