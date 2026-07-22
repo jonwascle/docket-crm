@@ -606,6 +606,22 @@
           </div>
         </div>
         <input class="search-input" id="spSearch" placeholder="Search by company name" oninput="renderServiceProvidersList()">
+        <div style="display:flex;gap:10px;align-items:center;margin:10px 0 14px;">
+          <label style="font-size:12.5px;font-weight:600;color:var(--slate);">Show:</label>
+          <select id="spStageFilter" onchange="renderServiceProvidersList()" style="max-width:260px;">
+            <option value="all">Everyone</option>
+            <option value="not_live">In progress (not live yet)</option>
+            <option value="declined">Declined only</option>
+            <option value="prospect">Prospect</option>
+            <option value="contacted">Called them</option>
+            <option value="link_sent">Sent onboarding link</option>
+            <option value="reviewing">Reviewing their info</option>
+            <option value="pricing_setup">Pricing set up</option>
+            <option value="wts_check">Checked WTS licence</option>
+            <option value="wapp_entry">Entered on Wapp</option>
+            <option value="live">Live</option>
+          </select>
+        </div>
         <div id="spListContainer"></div>
       </div>
 
@@ -636,7 +652,8 @@
 
         <div id="spSubtab-details">
           <input type="hidden" id="spId">
-          <div class="field"><label>Company name</label><input id="spName"></div>
+          <div class="field"><label>Company name</label><input id="spName" oninput="checkSPDuplicateContact()"></div>
+          <div id="spDuplicateWarning" style="display:none;"></div>
           <div class="field"><label>Address line 1</label><input id="spAddr1"></div>
           <div class="field"><label>Address line 2</label><input id="spAddr2"></div>
           <div class="field-row">
@@ -749,6 +766,11 @@
             <div class="onboard-section-head"><span class="onboard-section-title">Onboarding link</span></div>
             <p style="font-size:13px;color:var(--slate);margin-top:0;">Send this to the provider so they can fill in their own company details, team, waste transfer station, and documents — no login needed. It updates Docket directly once they submit.</p>
             <div id="spOnboardingLinkArea"></div>
+          </div>
+
+          <div class="onboard-section" style="margin-top:24px;">
+            <div class="onboard-section-head"><span class="onboard-section-title">Declined</span></div>
+            <div id="spDeclinedArea"></div>
           </div>
         </div>
       </div>
@@ -2911,18 +2933,31 @@ function showServiceProvidersList(){
 
 function renderServiceProvidersList(){
   const q = (document.getElementById('spSearch').value || '').toLowerCase();
+  const stageFilter = document.getElementById('spStageFilter').value;
   const container = document.getElementById('spListContainer');
-  const filtered = serviceProviders.filter(sp=>!q || sp.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+  let filtered = serviceProviders.filter(sp=>!q || sp.name.toLowerCase().includes(q));
+  if(stageFilter === 'not_live'){
+    filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') !== 'live');
+  }else if(stageFilter === 'declined'){
+    filtered = filtered.filter(sp=>sp.declined);
+  }else if(stageFilter !== 'all'){
+    filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') === stageFilter);
+  }
+  filtered = filtered.sort((a,b)=>a.name.localeCompare(b.name));
   if(filtered.length===0){
-    container.innerHTML = '<div class="empty-state">' + (serviceProviders.length===0 ? 'No service providers yet. Add your first one.' : 'No service providers match that search.') + '</div>';
+    container.innerHTML = '<div class="empty-state">' + (serviceProviders.length===0 ? 'No service providers yet. Add your first one.' : 'No service providers match that filter.') + '</div>';
     return;
   }
-  let html = '<table class="qtable"><thead><tr><th>Company</th><th>Phone</th><th>Waste carriers licence</th></tr></thead><tbody>';
+  let html = '<table class="qtable"><thead><tr><th>Company</th><th>Phone</th><th>Waste carriers licence</th><th>Status</th></tr></thead><tbody>';
   filtered.forEach(sp=>{
+    const stage = SP_RECRUITMENT_STAGES.find(s=>s.key===(sp.recruitment_stage||'prospect'));
     html += '<tr onclick="openServiceProviderDetail(\''+sp.id+'\')" style="cursor:pointer;">';
     html += '<td><b>'+escapeHtml(sp.name)+'</b></td>';
     html += '<td>'+escapeHtml(sp.phone||'—')+'</td>';
     html += '<td>'+escapeHtml(sp.waste_carriers_licence_number||'—')+'</td>';
+    html += '<td>'+(sp.declined
+      ? '<span class="badge" style="background:var(--stamp-red-bg);color:var(--stamp-red);">Declined</span>'
+      : '<span class="badge">'+escapeHtml(stage ? stage.label : 'Prospect')+'</span>')+'</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -2955,6 +2990,7 @@ async function openServiceProviderDetail(id){
   document.getElementById('spDetailTitle').textContent = row ? row.name : 'New service provider';
   document.getElementById('spId').value = id || '';
   document.getElementById('spName').value = row ? row.name : '';
+  document.getElementById('spDuplicateWarning').style.display = 'none';
   document.getElementById('spAddr1').value = row ? (row.address_line1||'') : '';
   document.getElementById('spAddr2').value = row ? (row.address_line2||'') : '';
   document.getElementById('spCity').value = row ? (row.city||'') : '';
@@ -2999,6 +3035,7 @@ async function openServiceProviderDetail(id){
   currentSPRecruitmentStage = row ? (row.recruitment_stage || 'prospect') : 'prospect';
   renderSPRecruitmentStageTracker();
   renderSPRecruitmentGuidance();
+  renderSPDeclinedArea(row);
 
   if(id){
     await loadSPDocuments(id);
@@ -3865,6 +3902,69 @@ function renderSPRecruitmentGuidance(){
   }
   html += '</div>';
   container.innerHTML = html;
+}
+
+function renderSPDeclinedArea(row){
+  const container = document.getElementById('spDeclinedArea');
+  if(!container) return;
+  if(row && row.declined){
+    container.innerHTML = '<p style="font-size:13px;color:var(--stamp-red);margin:0 0 10px;"><b>Declined'+(row.declined_at ? ' on ' + new Date(row.declined_at).toLocaleDateString('en-GB') : '')+'.</b></p>'
+      + '<div class="script-box" style="border-color:var(--stamp-red);">'+escapeHtml(row.declined_reason || 'No reason given.')+'</div>'
+      + '<button class="btn ghost small" onclick="undoSPDeclined()" style="margin-top:12px;">This is no longer accurate — undo</button>';
+  }else{
+    container.innerHTML = '<p style="font-size:13px;color:var(--slate);margin:0 0 10px;">If this provider doesn\'t want to join Wascle, record it here — if we ever consider approaching them again, this note will be right here as a reminder.</p>'
+      + '<textarea id="spDeclinedReasonInput" placeholder="Why did they decline? e.g. already committed to another company, pricing didn\'t work for them, not interested at this time..."></textarea>'
+      + '<button class="btn danger small" onclick="markSPDeclined()" style="margin-top:8px;">Mark as declined</button>';
+  }
+}
+
+async function markSPDeclined(){
+  if(!currentSPId){ showToast('Save this service provider first.', true); return; }
+  const reason = document.getElementById('spDeclinedReasonInput').value.trim();
+  if(!reason){ showToast('Please note why they declined, so it\'s useful if we look at this again later.', true); return; }
+  const { error } = await sb.from('service_providers').update({ declined: true, declined_reason: reason, declined_at: new Date().toISOString() }).eq('id', currentSPId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadServiceProviders();
+  const updatedRow = serviceProviders.find(s=>s.id===currentSPId);
+  renderSPDeclinedArea(updatedRow);
+  showToast('Marked as declined.');
+}
+
+async function undoSPDeclined(){
+  if(!currentSPId) return;
+  if(!confirm('Remove the declined status and reason for this provider?')) return;
+  const { error } = await sb.from('service_providers').update({ declined: false, declined_reason: null, declined_at: null }).eq('id', currentSPId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadServiceProviders();
+  const updatedRow = serviceProviders.find(s=>s.id===currentSPId);
+  renderSPDeclinedArea(updatedRow);
+  showToast('Declined status removed.');
+}
+
+function checkSPDuplicateContact(){
+  const warningEl = document.getElementById('spDuplicateWarning');
+  if(currentSPId){ warningEl.style.display = 'none'; return; } // only relevant when adding a brand new provider
+  const typed = document.getElementById('spName').value.trim().toLowerCase();
+  if(typed.length < 3){ warningEl.style.display = 'none'; return; }
+  const matches = serviceProviders.filter(sp=>{
+    const existing = sp.name.toLowerCase();
+    return existing.includes(typed) || typed.includes(existing);
+  });
+  if(matches.length === 0){ warningEl.style.display = 'none'; return; }
+  warningEl.style.display = 'block';
+  warningEl.innerHTML = '<div class="script-box" style="border-color:var(--stamp-red);">'
+    + '<b style="color:var(--stamp-red);">We may have contacted this company before:</b>'
+    + matches.map(sp=>{
+        let extra;
+        if(sp.declined){
+          extra = '<br><span style="color:var(--stamp-red);">Previously declined — '+escapeHtml(sp.declined_reason||'no reason given')+'</span>';
+        }else{
+          const stage = SP_RECRUITMENT_STAGES.find(s=>s.key===(sp.recruitment_stage||'prospect'));
+          extra = '<br><span style="color:var(--slate);">Current status: '+escapeHtml(stage?stage.label:'Prospect')+'</span>';
+        }
+        return '<div style="margin-top:8px;"><span style="cursor:pointer;color:var(--brass);font-weight:600;" onclick="openServiceProviderDetail(\''+sp.id+'\')">'+escapeHtml(sp.name)+'</span>'+extra+'</div>';
+      }).join('')
+    + '</div>';
 }
 
 async function advanceSPRecruitmentStage(){
@@ -5247,4 +5347,3 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
-
