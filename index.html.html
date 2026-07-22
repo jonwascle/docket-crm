@@ -770,7 +770,8 @@
         <div id="spSubtab-recruitment" style="display:none;">
           <div id="spQuickAddArea" style="display:none;">
             <p style="font-size:13.5px;color:var(--ink-soft);margin-top:0;">Add the basics to get this prospect on Docket — you can fill in everything else later, on the other tabs.</p>
-            <div class="field"><label>Name of service provider *</label><input id="spQuickName"></div>
+            <div class="field"><label>Name of service provider *</label><input id="spQuickName" oninput="checkSPQuickDuplicateContact()"></div>
+            <div id="spQuickDuplicateWarning" style="display:none;"></div>
             <div class="field"><label>Phone number *</label><input id="spQuickPhone"></div>
             <div class="field-row">
               <div class="field"><label>Website</label><input id="spQuickWebsite"></div>
@@ -3072,6 +3073,7 @@ async function openServiceProviderDetail(id){
       document.getElementById(fid).value = '';
     });
     document.getElementById('spQuickAddError').style.display = 'none';
+    document.getElementById('spQuickDuplicateWarning').style.display = 'none';
   }
 
   if(id){
@@ -4014,13 +4016,14 @@ async function saveQuickProspect(){
     website: document.getElementById('spQuickWebsite').value.trim(),
     email: document.getElementById('spQuickEmail').value.trim(),
     county: document.getElementById('spQuickCounty').value.trim(),
-    recruitment_stage: 'prospect'
+    recruitment_stage: 'contacted'
   };
   const { data, error } = await sb.from('service_providers').insert(payload).select().single();
   if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
   await loadServiceProviders();
   showToast('Prospect added.');
-  openServiceProviderDetail(data.id);
+  await openServiceProviderDetail(data.id);
+  switchSPSubtab('details');
 }
 
 function renderSPDeclinedArea(row){
@@ -4061,9 +4064,17 @@ async function undoSPDeclined(){
 }
 
 function checkSPDuplicateContact(){
-  const warningEl = document.getElementById('spDuplicateWarning');
+  checkSPDuplicateByName(document.getElementById('spName').value, 'spDuplicateWarning');
+}
+
+function checkSPQuickDuplicateContact(){
+  checkSPDuplicateByName(document.getElementById('spQuickName').value, 'spQuickDuplicateWarning');
+}
+
+function checkSPDuplicateByName(rawName, warningElId){
+  const warningEl = document.getElementById(warningElId);
   if(currentSPId){ warningEl.style.display = 'none'; return; } // only relevant when adding a brand new provider
-  const typed = document.getElementById('spName').value.trim().toLowerCase();
+  const typed = rawName.trim().toLowerCase();
   if(typed.length < 3){ warningEl.style.display = 'none'; return; }
   const matches = serviceProviders.filter(sp=>{
     const existing = sp.name.toLowerCase();
