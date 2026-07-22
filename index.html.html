@@ -2990,7 +2990,8 @@ async function openServiceProviderDetail(id){
 
   document.getElementById('spListMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'block';
-  switchSPSubtab('details');
+  const defaultSPTab = (row && row.recruitment_stage === 'live') ? 'details' : 'recruitment';
+  switchSPSubtab(defaultSPTab);
 
   currentSPServiceGroups = row ? (row.service_groups || []) : [];
   renderSPServiceGroups();
