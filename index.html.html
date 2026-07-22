@@ -1277,7 +1277,7 @@ const SP_RECRUITMENT_STAGES = [
   },
   {
     key: 'link_sent', label: 'Info & pricing email',
-    guidance: 'FOLLOW-UP EMAIL (adapt as needed) — attach the pricing PDF you downloaded on the last stage, and include the onboarding link from below:\n\nSubject: Wascle — working together as a service provider\n\nHi [Contact Name],\n\nThanks for taking the time to speak with me today. As discussed, we\'d love to have you on board as one of our service providers.\n\nA bit about us: [add a line or two about Wascle here]\nOur website: [add website link]\n[Add a short video link here if useful]\n\nI\'ve attached our rates for the services we discussed — take a look and let me know if you have any questions.\n\nTo get you set up, please also fill in your details using the secure link below — it only takes a few minutes and covers your company details, team, waste transfer station, and any documents like your insurance and waste carriers licence:\n\n[Paste the onboarding link from below into your email]\n\nOnce you\'ve done that, we\'ll be in touch to get you live.\n\nThanks,\n[Your name]\n\n---\nGenerate the link below, then copy it into this email before sending, along with the pricing PDF.'
+    guidance: 'Click the button below to send them everything in one go — a bit about Wascle, the pricing PDF from the last stage, and their onboarding link — all sent automatically to the email address on their Details tab.'
   },
   {
     key: 'reviewing', label: 'Reviewing their info',
@@ -3939,17 +3939,15 @@ function pdfCategoryRank(category){
   return idx === -1 ? PDF_CATEGORY_ORDER.length : idx;
 }
 
-function downloadSPPricingPdf(){
-  if(!currentSPId) return;
-  const sp = serviceProviders.find(s=>s.id===currentSPId);
+function buildSPPricingPdfString(sp){
   const activeItems = spVisiblePricingRows().filter(r=>r.is_active !== false)
     .slice()
     .sort((a,b)=> pdfCategoryRank(a.category) - pdfCategoryRank(b.category));
-  if(!sp || activeItems.length===0){ showToast('No included pricing lines to put in the PDF.', true); return; }
+  if(activeItems.length===0) return null;
   const items = activeItems.map(r=>({ name: r.service_name, category: r.category, basePrice: r.rate }));
   const pseudoQuote = { id: sp.id, contactId: null, createdAt: Date.now(), adjustmentPct: 0, items };
   const pseudoContact = { name: sp.name, email: sp.email, organisation_id: null };
-  const pdfString = buildQuotePdfString(pseudoQuote, pseudoContact, {
+  return buildQuotePdfString(pseudoQuote, pseudoContact, {
     headerLabel: 'SUPPLIER PRICING',
     preparedForLabel: 'PREPARED FOR',
     referenceLabel: 'DATE',
@@ -3957,6 +3955,14 @@ function downloadSPPricingPdf(){
     hideDateRow: true,
     footerText: 'These rates are confidential and specific to ' + sp.name + '. Prices are shown in GBP, plus VAT.'
   });
+}
+
+function downloadSPPricingPdf(){
+  if(!currentSPId) return;
+  const sp = serviceProviders.find(s=>s.id===currentSPId);
+  if(!sp){ return; }
+  const pdfString = buildSPPricingPdfString(sp);
+  if(!pdfString){ showToast('No included pricing lines to put in the PDF.', true); return; }
   downloadPdfString(pdfString, 'Pricing - ' + sp.name.replace(/[^a-z0-9]+/gi,'-') + '.pdf');
 }
 
@@ -3988,6 +3994,9 @@ function renderSPRecruitmentGuidance(){
   const isLastStage = currentIndex === SP_RECRUITMENT_STAGES.length - 1;
   let html = '<label style="display:block;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--ink-soft);">'+escapeHtml(stage.label)+'</label>';
   html += '<div class="script-box">'+escapeHtml(stage.guidance)+'</div>';
+  if(stage.key === 'link_sent'){
+    html += '<button class="btn small" id="sendSPInfoPricingEmailBtn" onclick="sendSPInfoPricingEmail()" style="margin-top:12px;">Send info &amp; pricing email</button>';
+  }
   html += '<div style="display:flex;gap:8px;margin-top:12px;">';
   if(currentIndex > 0){
     html += '<button class="btn ghost small" onclick="moveSPRecruitmentStageBack()">← Move back a stage</button>';
@@ -4135,6 +4144,50 @@ function renderSPOnboardingLinkArea(){
     });
   }
   container.innerHTML = html;
+}
+
+async function sendSPInfoPricingEmail(){
+  if(!currentSPId) return;
+  const sp = serviceProviders.find(s=>s.id===currentSPId);
+  if(!sp){ return; }
+  if(!sp.email){ showToast('Add an email address on the Details tab first.', true); return; }
+
+  const pdfString = buildSPPricingPdfString(sp);
+  if(!pdfString){ showToast('No included pricing lines to send — set up their pricing first.', true); return; }
+
+  const btn = document.getElementById('sendSPInfoPricingEmailBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  try{
+    await sb.from('sp_onboarding_links').delete().eq('service_provider_id', currentSPId);
+    const { data: linkRow, error: linkErr } = await sb.from('sp_onboarding_links').insert({ service_provider_id: currentSPId }).select().single();
+    if(linkErr){ showToast('Could not create onboarding link: ' + linkErr.message, true); return; }
+    spOnboardingLinks = [linkRow];
+    renderSPOnboardingLinkArea();
+    const onboardingLink = window.location.origin + window.location.pathname + '#supplier-onboard=' + linkRow.token;
+
+    const pdfBytes = new Uint8Array(pdfString.length);
+    for(let i=0;i<pdfString.length;i++){
+      const code = pdfString.charCodeAt(i);
+      pdfBytes[i] = code < 256 ? code : 0x3F;
+    }
+    const pdfBase64 = bytesToBase64(pdfBytes);
+
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(SP_FUNCTIONS_URL + 'send-sp-recruitment-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ spEmail: sp.email, spName: sp.name, onboardingLink, pdfBase64 })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || data.error){
+      showToast('Could not send email: ' + (data.error || res.statusText), true);
+      return;
+    }
+    showToast('Info & pricing email sent to ' + sp.email + '.');
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Send info & pricing email'; }
+  }
 }
 
 async function generateSPOnboardingLink(){
