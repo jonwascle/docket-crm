@@ -3012,7 +3012,15 @@ async function switchSPSubtab(tab){
 
 async function openServiceProviderDetail(id){
   currentSPId = id;
-  const row = id ? serviceProviders.find(x=>x.id===id) : null;
+  let row = id ? serviceProviders.find(x=>x.id===id) : null;
+  if(id){
+    const { data: freshRow, error: freshErr } = await sb.from('service_providers').select('*').eq('id', id).maybeSingle();
+    if(!freshErr && freshRow){
+      row = freshRow;
+      const idx = serviceProviders.findIndex(s=>s.id===id);
+      if(idx > -1) serviceProviders[idx] = freshRow; else serviceProviders.push(freshRow);
+    }
+  }
   document.getElementById('spDetailTitle').textContent = row ? row.name : 'New service provider';
   document.getElementById('spId').value = id || '';
   document.getElementById('spName').value = row ? row.name : '';
