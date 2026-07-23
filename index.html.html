@@ -4188,6 +4188,23 @@ function renderSPRecruitmentGuidance(){
       html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ Every waste transfer station and the waste carriers licence have been confirmed.</p>';
     }
   }
+  if(stage.key === 'wapp_entry'){
+    const sp = serviceProviders.find(s=>s.id===currentSPId);
+    const completed = new Set((sp && sp.recruitment_completed_stages) || []);
+    const stillNeeded = SP_RECRUITMENT_STAGES.filter(s=>s.key !== 'wapp_entry' && s.key !== 'live' && !completed.has(s.key));
+    const missing = computeMissingSPOnboardingFields();
+    const unconfirmed = computeUnconfirmedWasteStations();
+    const carriersLicenceConfirmed = sp && sp.waste_carriers_licence_confirmed_at;
+    if(stillNeeded.length > 0){
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>Other stages still need completing first:</b><ul>'+stillNeeded.map(s=>'<li>'+escapeHtml(s.label)+'</li>').join('')+'</ul></div>';
+    }else if(missing.length > 0){
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>Still missing on the Details tab:</b><ul>'+missing.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul></div>';
+    }else if(unconfirmed.length > 0 || !carriersLicenceConfirmed){
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>Waste certification checks still need finishing</b> — see the Waste certification tab.</div>';
+    }else{
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ Everything is in place — ready to log this in Wapp.</p>';
+    }
+  }
   html += '<div style="display:flex;justify-content:flex-end;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">';
   const spForFooter = serviceProviders.find(x=>x.id===currentSPId);
   const liveDone = spForFooter && (spForFooter.recruitment_completed_stages||[]).includes('live');
@@ -4319,11 +4336,18 @@ function computeMissingSPOnboardingFields(){
   if(!sp.postcode) missing.push('Postcode');
   if(!sp.email) missing.push('Email');
   if(!sp.phone) missing.push('Phone');
+  if(!sp.website) missing.push('Website');
   if(sp.vat_registered === null || sp.vat_registered === undefined) missing.push('Whether they\'re VAT registered');
   else if(sp.vat_registered && !sp.vat_number) missing.push('VAT number');
   else if(!sp.vat_registered && !sp.utr_number) missing.push('UTR number');
   if(!sp.business_type) missing.push('Sole trader or registered company');
   else if(sp.business_type === 'company' && !sp.company_number) missing.push('Company number');
+  if(!sp.sic_code) missing.push('SIC code');
+  if(!sp.invoice_recipient_name) missing.push('Invoice recipient name');
+  if(!sp.invoice_recipient_email) missing.push('Invoice recipient email');
+  if(!sp.bank_account_name) missing.push('Bank account name');
+  if(!sp.bank_account_number) missing.push('Bank account number');
+  if(!sp.bank_sort_code) missing.push('Sort code');
 
   if(spTeamMembers.length === 0) missing.push('At least one team member');
   if(spWasteStations.length === 0) missing.push('At least one waste transfer station');
@@ -4384,6 +4408,29 @@ async function completeSPRecruitmentStage(stageKey){
   }
 
   if(stageKey === 'wts_check'){
+    const unconfirmed = computeUnconfirmedWasteStations();
+    if(unconfirmed.length > 0){
+      showToast('Confirm the licence check for every waste transfer station first — ' + unconfirmed.length + ' still need it.', true);
+      return;
+    }
+    if(!sp.waste_carriers_licence_confirmed_at){
+      showToast('Confirm the waste carriers licence check first.', true);
+      return;
+    }
+  }
+
+  if(stageKey === 'wapp_entry'){
+    const completed = new Set(sp.recruitment_completed_stages || []);
+    const stillNeeded = SP_RECRUITMENT_STAGES.filter(s=>s.key !== 'wapp_entry' && s.key !== 'live' && !completed.has(s.key));
+    if(stillNeeded.length > 0){
+      showToast('Every other stage needs completing first — still needed: ' + stillNeeded.map(s=>s.label).join(', '), true);
+      return;
+    }
+    const missing = computeMissingSPOnboardingFields();
+    if(missing.length > 0){
+      showToast('Can\'t complete this yet — still missing on the Details tab: ' + missing.join(', '), true);
+      return;
+    }
     const unconfirmed = computeUnconfirmedWasteStations();
     if(unconfirmed.length > 0){
       showToast('Confirm the licence check for every waste transfer station first — ' + unconfirmed.length + ' still need it.', true);
@@ -5729,7 +5776,16 @@ function buildSPWappSetupPdfString(sp){
   if(pricingRows.length > 0){
     sectionHeading('Pricing agreed');
     pricingRows.forEach(r=>{
-      fieldRow(r.service_name, '£' + Number(r.rate).toFixed(2));
+      const nameLines = wrapText(r.service_name, 62);
+      newPageIfNeeded(12 * nameLines.length + 12);
+      nameLines.forEach((ln, i)=>{
+        text(ln, marginX, y + (i*11.5), 9.5, '0.08 0.08 0.08', 'F1');
+      });
+      text('£' + Number(r.rate).toFixed(2), rightX - 60, y, 9.5, '0.08 0.08 0.08', 'F1');
+      y += 11.5 * nameLines.length;
+      y += 6;
+      line(marginX, y, rightX, y, 0.5, '0.85 0.85 0.85');
+      y += 12;
     });
     y += 8;
   }
