@@ -776,7 +776,7 @@
               <div class="field"><label>Website</label><input id="spQuickWebsite"></div>
               <div class="field"><label>Email address</label><input id="spQuickEmail" type="email"></div>
             </div>
-            <div class="field" style="max-width:260px;"><label>Location (county)</label><input id="spQuickCounty"></div>
+            <div class="field" style="max-width:260px;"><label>Location (county) *</label><input id="spQuickCounty"></div>
             <div class="login-error" id="spQuickAddError" style="display:none;"></div>
             <button class="btn" onclick="saveQuickProspect()" style="margin-top:6px;">Save prospect</button>
           </div>
@@ -1394,6 +1394,7 @@ async function afterLogin(user){
     showQuickTaskScreen();
     return;
   }
+  document.getElementById('helpChatBubble').style.display = 'flex';
 
   const wasTaskLink = handleTaskDeepLink();
   if(!wasTaskLink) await restoreAppViewFromHash();
@@ -4093,8 +4094,9 @@ async function saveQuickProspect(){
   errEl.style.display = 'none';
   const name = document.getElementById('spQuickName').value.trim();
   const phone = document.getElementById('spQuickPhone').value.trim();
-  if(!name || !phone){
-    errEl.textContent = 'Name and phone number are both required.';
+  const county = document.getElementById('spQuickCounty').value.trim();
+  if(!name || !phone || !county){
+    errEl.textContent = 'Name, phone number, and county are all required.';
     errEl.style.display = 'block';
     return;
   }
@@ -4103,7 +4105,7 @@ async function saveQuickProspect(){
     phone,
     website: document.getElementById('spQuickWebsite').value.trim(),
     email: document.getElementById('spQuickEmail').value.trim(),
-    county: document.getElementById('spQuickCounty').value.trim(),
+    county,
     recruitment_stage: 'contacted'
   };
   const { data, error } = await sb.from('service_providers').insert(payload).select().single();
@@ -4111,7 +4113,7 @@ async function saveQuickProspect(){
   await loadServiceProviders();
   showToast('Prospect added.');
   await openServiceProviderDetail(data.id);
-  switchSPSubtab('details');
+  switchSPSubtab('recruitment');
 }
 
 function renderSPDeclinedArea(row){
@@ -5680,10 +5682,90 @@ async function loadData(){
   renderAll();
 }
 
+let helpChatHistory = [];
+let helpChatOpened = false;
+
+function toggleHelpChat(){
+  const panel = document.getElementById('helpChatPanel');
+  const isHidden = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = isHidden ? 'flex' : 'none';
+  if(isHidden && !helpChatOpened){
+    helpChatOpened = true;
+    appendHelpChatMessage('assistant', "Hi! Ask me how to do anything in Docket — like \"how do I add a new service provider\" or \"how do I mark a customer as live\".");
+  }
+  if(isHidden) document.getElementById('helpChatInput').focus();
+}
+
+function appendHelpChatMessage(role, text){
+  const container = document.getElementById('helpChatMessages');
+  const isUser = role === 'user';
+  const bubble = document.createElement('div');
+  bubble.style.cssText = 'margin-bottom:10px;display:flex;justify-content:'+(isUser?'flex-end':'flex-start')+';';
+  bubble.innerHTML = '<div style="max-width:85%;padding:9px 12px;border-radius:12px;background:'+(isUser?'var(--ink)':'var(--paper-card-alt)')+';color:'+(isUser?'#fff':'var(--ink)')+';white-space:pre-wrap;line-height:1.5;">'+escapeHtml(text)+'</div>';
+  container.appendChild(bubble);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendHelpChatMessage(){
+  const input = document.getElementById('helpChatInput');
+  const question = input.value.trim();
+  if(!question) return;
+  input.value = '';
+  appendHelpChatMessage('user', question);
+  helpChatHistory.push({ role: 'user', content: question });
+
+  const btn = document.getElementById('helpChatSendBtn');
+  btn.disabled = true;
+  const container = document.getElementById('helpChatMessages');
+  const loadingEl = document.createElement('div');
+  loadingEl.id = 'helpChatLoading';
+  loadingEl.style.cssText = 'margin-bottom:10px;color:var(--slate);font-size:12.5px;font-style:italic;';
+  loadingEl.textContent = 'Thinking…';
+  container.appendChild(loadingEl);
+  container.scrollTop = container.scrollHeight;
+
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(SP_FUNCTIONS_URL + 'docket-help-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ messages: helpChatHistory })
+    });
+    const data = await res.json().catch(()=>({}));
+    document.getElementById('helpChatLoading')?.remove();
+    if(!res.ok || data.error){
+      appendHelpChatMessage('assistant', data.error || 'Sorry, something went wrong answering that.');
+      return;
+    }
+    appendHelpChatMessage('assistant', data.answer);
+    helpChatHistory.push({ role: 'assistant', content: data.answer });
+  }catch(e){
+    document.getElementById('helpChatLoading')?.remove();
+    appendHelpChatMessage('assistant', 'Sorry, could not reach the help assistant just now.');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
 function quoteRefLabel(q){
   return 'Q-' + q.id.slice(-6).toUpperCase();
 }
 
 </script>
+<!-- ============ HELP CHAT WIDGET ============ -->
+<div id="helpChatBubble" onclick="toggleHelpChat()" style="display:none;position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg, var(--brass) 0%, #f0a51e 100%);align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.2);z-index:200;font-size:24px;">💬</div>
+
+<div id="helpChatPanel" style="display:none;position:fixed;bottom:92px;right:24px;width:340px;max-width:calc(100vw - 32px);height:460px;max-height:calc(100vh - 140px);background:var(--paper-card);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.18);z-index:200;flex-direction:column;overflow:hidden;border:1px solid var(--border);">
+  <div style="background:linear-gradient(135deg, var(--brass) 0%, #f0a51e 100%);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-family:'Comfortaa',sans-serif;font-weight:700;color:#1B1B1B;font-size:14.5px;">Docket Help</span>
+    <span onclick="toggleHelpChat()" style="cursor:pointer;color:#1B1B1B;font-size:18px;line-height:1;">✕</span>
+  </div>
+  <div id="helpChatMessages" style="flex:1;overflow-y:auto;padding:14px;font-size:13px;"></div>
+  <div style="padding:10px;border-top:1px solid var(--border);display:flex;gap:8px;">
+    <input id="helpChatInput" placeholder="Ask how to do something..." style="flex:1;font-size:13px;padding:9px 11px;" onkeydown="if(event.key==='Enter'){sendHelpChatMessage();}">
+    <button class="btn small" id="helpChatSendBtn" onclick="sendHelpChatMessage()" style="width:auto;padding:9px 14px;">Ask</button>
+  </div>
+</div>
+
 </body>
 </html>
