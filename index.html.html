@@ -4105,10 +4105,18 @@ function renderSPDeclinedArea(row){
       + '<div class="script-box" style="border-color:var(--stamp-red);">'+escapeHtml(row.declined_reason || 'No reason given.')+'</div>'
       + '<button class="btn ghost small" onclick="undoSPDeclined()" style="margin-top:12px;">This is no longer accurate — undo</button>';
   }else{
-    container.innerHTML = '<p style="font-size:13px;color:var(--slate);margin:0 0 10px;">If this provider doesn\'t want to join Wascle, record it here — if we ever consider approaching them again, this note will be right here as a reminder.</p>'
+    container.innerHTML = '<button class="btn ghost small" onclick="expandSPDeclinedForm()" id="spMarkDeclinedToggleBtn">Mark as declined</button>'
+      + '<div id="spDeclinedFormArea" style="display:none;margin-top:12px;">'
+      + '<p style="font-size:13px;color:var(--slate);margin:0 0 10px;">If this provider doesn\'t want to join Wascle, record it here — if we ever consider approaching them again, this note will be right here as a reminder.</p>'
       + '<textarea id="spDeclinedReasonInput" placeholder="Why did they decline? e.g. already committed to another company, pricing didn\'t work for them, not interested at this time..."></textarea>'
-      + '<button class="btn danger small" onclick="markSPDeclined()" style="margin-top:8px;">Mark as declined</button>';
+      + '<button class="btn danger small" onclick="markSPDeclined()" style="margin-top:8px;">Confirm declined</button>'
+      + '</div>';
   }
+}
+
+function expandSPDeclinedForm(){
+  document.getElementById('spMarkDeclinedToggleBtn').style.display = 'none';
+  document.getElementById('spDeclinedFormArea').style.display = 'block';
 }
 
 async function markSPDeclined(){
