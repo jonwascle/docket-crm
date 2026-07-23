@@ -782,9 +782,9 @@
           </div>
 
           <div id="spRecruitmentNormalArea">
-          <div class="field">
-            <label>Recruitment stage</label>
-            <div id="spRecruitmentStageTracker" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+          <div class="onboard-section" style="border-top:3px solid var(--brass);">
+            <div class="onboard-section-head"><span class="onboard-section-title">Recruitment stage</span></div>
+            <div id="spRecruitmentStageTracker" style="display:flex;flex-direction:column;"></div>
           </div>
 
           <div id="spRecruitmentStageGuidance" style="margin-top:20px;"></div>
@@ -4011,8 +4011,20 @@ function renderSPRecruitmentStageTracker(){
   const container = document.getElementById('spRecruitmentStageTracker');
   const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
   container.innerHTML = SP_RECRUITMENT_STAGES.map((s,i)=>{
-    const cls = i===currentIndex ? 'current' : (i<currentIndex ? 'done' : '');
-    return '<span class="stage-pill '+cls+'">'+(i<currentIndex?'✓ ':'')+escapeHtml(s.label)+'</span>';
+    const isDone = i < currentIndex;
+    const isCurrent = i === currentIndex;
+    const isLast = i === SP_RECRUITMENT_STAGES.length - 1;
+    const circleColor = isDone ? 'var(--stamp-green)' : (isCurrent ? 'var(--brass)' : 'var(--paper-card-alt)');
+    const circleBorder = isDone ? 'var(--stamp-green)' : (isCurrent ? 'var(--brass)' : 'var(--border)');
+    const textColor = isDone ? 'var(--stamp-green)' : (isCurrent ? 'var(--ink)' : 'var(--slate)');
+    const lineColor = isDone ? 'var(--stamp-green)' : 'var(--border)';
+    return '<div style="display:flex;gap:12px;align-items:flex-start;">'
+      + '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">'
+      + '<span style="width:26px;height:26px;border-radius:50%;background:'+circleColor+';border:2px solid '+circleBorder+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:'+(isDone||isCurrent?'#fff':'var(--slate)')+';box-shadow:'+(isCurrent?'0 0 0 4px rgba(245,180,41,0.25)':'none')+';transition:box-shadow 0.3s ease;">'+(isDone?'✓':(i+1))+'</span>'
+      + (isLast ? '' : '<div style="width:2px;flex:1;min-height:18px;background:'+lineColor+';"></div>')
+      + '</div>'
+      + '<span style="font-size:13.5px;font-weight:'+(isCurrent?'700':'600')+';color:'+textColor+';padding-top:3px;padding-bottom:'+(isLast?'0':'14')+'px;">'+escapeHtml(s.label)+'</span>'
+      + '</div>';
   }).join('');
 }
 
@@ -4032,10 +4044,11 @@ function renderSPRecruitmentGuidance(){
   const stage = SP_RECRUITMENT_STAGES[currentIndex];
   if(!stage){ container.innerHTML = ''; return; }
   const isLastStage = currentIndex === SP_RECRUITMENT_STAGES.length - 1;
-  let html = '<label style="display:block;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--ink-soft);">'+escapeHtml(stage.label)+'</label>';
+  let html = '<div class="onboard-section" style="border-top:3px solid var(--brass);">';
+  html += '<div class="onboard-section-head"><span class="onboard-section-title">Step '+(currentIndex+1)+' of '+SP_RECRUITMENT_STAGES.length+' — '+escapeHtml(stage.label)+'</span></div>';
   html += '<div class="script-box">'+escapeHtml(stage.guidance)+'</div>';
   if(stage.key === 'link_sent'){
-    html += '<button class="btn small" id="sendSPInfoPricingEmailBtn" onclick="sendSPInfoPricingEmail()" style="margin-top:12px;">Send info &amp; pricing email</button>';
+    html += '<button class="btn small" id="sendSPInfoPricingEmailBtn" onclick="sendSPInfoPricingEmail()" style="margin-top:14px;">Send info &amp; pricing email</button>';
     const sp = serviceProviders.find(s=>s.id===currentSPId);
     if(sp && sp.info_pricing_email_sent_at){
       const sender = teamMembers.find(m=>m.id===sp.info_pricing_email_sent_by);
@@ -4043,33 +4056,34 @@ function renderSPRecruitmentGuidance(){
     }
   }
   if(stage.key === 'pricing_setup'){
-    html += '<button class="btn small" onclick="switchSPSubtab(\'pricing\')" style="margin-top:12px;">Set up pricing →</button>';
+    html += '<button class="btn small" onclick="switchSPSubtab(\'pricing\')" style="margin-top:14px;">Set up pricing →</button>';
   }
   if(stage.key === 'reviewing'){
     const missing = computeMissingSPOnboardingFields();
     if(missing.length > 0){
-      html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>Still needed before this can move on:</b><ul>'+missing.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul></div>';
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>Still needed before this can move on:</b><ul>'+missing.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul></div>';
     }else{
-      html += '<p style="font-size:12.5px;color:var(--stamp-green);margin-top:12px;">✓ Everything required has been filled in.</p>';
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ Everything required has been filled in.</p>';
     }
   }
   if(stage.key === 'wts_check'){
     const unconfirmed = computeUnconfirmedWasteStations();
     if(spWasteStations.length === 0){
-      html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>No waste transfer stations added yet</b> — add at least one on the Waste transfer stations tab before this can move on.</div>';
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>No waste transfer stations added yet</b> — add at least one on the Waste transfer stations tab before this can move on.</div>';
     }else if(unconfirmed.length > 0){
-      html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>'+unconfirmed.length+' waste transfer station'+(unconfirmed.length===1?'':'s')+' still need'+(unconfirmed.length===1?'s':'')+' the licence check confirmed:</b><ul>'+unconfirmed.map(w=>'<li>'+escapeHtml(w.station_name)+'</li>').join('')+'</ul></div>';
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>'+unconfirmed.length+' waste transfer station'+(unconfirmed.length===1?'':'s')+' still need'+(unconfirmed.length===1?'s':'')+' the licence check confirmed:</b><ul>'+unconfirmed.map(w=>'<li>'+escapeHtml(w.station_name)+'</li>').join('')+'</ul></div>';
     }else{
-      html += '<p style="font-size:12.5px;color:var(--stamp-green);margin-top:12px;">✓ Every waste transfer station has been confirmed.</p>';
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ Every waste transfer station has been confirmed.</p>';
     }
   }
-  html += '<div style="display:flex;gap:8px;margin-top:12px;">';
-  if(currentIndex > 0){
-    html += '<button class="btn ghost small" onclick="moveSPRecruitmentStageBack()">← Move back a stage</button>';
-  }
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">';
+  html += currentIndex > 0 ? '<span onclick="moveSPRecruitmentStageBack()" style="cursor:pointer;color:var(--slate);font-size:12.5px;font-weight:600;">← Move back a stage</span>' : '<span></span>';
   if(!isLastStage){
-    html += '<button class="btn small" onclick="advanceSPRecruitmentStage()">Mark this stage complete →</button>';
+    html += '<button class="btn" onclick="advanceSPRecruitmentStage()" style="width:auto;padding:11px 22px;">Mark this stage complete →</button>';
+  }else{
+    html += '<span style="font-size:13px;color:var(--stamp-green);font-weight:700;">🎉 Fully onboarded!</span>';
   }
+  html += '</div>';
   html += '</div>';
   container.innerHTML = html;
 }
@@ -4212,6 +4226,28 @@ function computeUnconfirmedWasteStations(){
   return spWasteStations.filter(w=>!w.licence_confirmed_at);
 }
 
+function playSuccessChime(){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 — a bright, quick major arpeggio
+    notes.forEach((freq, i)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const startTime = now + i * 0.09;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.16, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.45);
+      osc.start(startTime);
+      osc.stop(startTime + 0.45);
+    });
+  }catch(e){ /* Web Audio not available — fail silently, no big deal */ }
+}
+
 async function advanceSPRecruitmentStage(){
   const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
   if(currentIndex < 0 || currentIndex >= SP_RECRUITMENT_STAGES.length - 1) return;
@@ -4233,6 +4269,7 @@ async function advanceSPRecruitmentStage(){
   }
 
   await setSPRecruitmentStage(SP_RECRUITMENT_STAGES[currentIndex + 1].key);
+  playSuccessChime();
 }
 
 async function moveSPRecruitmentStageBack(){
@@ -5650,4 +5687,3 @@ function quoteRefLabel(q){
 </script>
 </body>
 </html>
-
