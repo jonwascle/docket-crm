@@ -1102,7 +1102,7 @@
     <div class="field" id="spDocumentNameField"><label>Document name</label><input id="spDocumentName" placeholder="e.g. Insurance, Jon Smith"></div>
     <div class="field" id="spDocumentFileField"><label>File</label><input id="spDocumentFile" type="file"></div>
     <div class="field" id="spDocumentTextValueField" style="display:none;"><label id="spDocumentTextValueLabel">Value</label><input id="spDocumentTextValue"></div>
-    <div class="field"><label>Reminder — expiry date (optional)</label><input id="spDocumentExpiryDate" type="date"></div>
+    <div class="field"><label>Expiry date *</label><input id="spDocumentExpiryDate" type="date"></div>
     <p style="font-size:12px;color:var(--slate);margin-top:-8px;">Leave this blank if this document doesn't need renewing (e.g. a photo). If you set a date, a task will be created to get a replacement.</p>
     <div class="modal-actions">
       <button class="btn danger small" id="spDocumentDeleteBtn" style="display:none;" onclick="deleteSPDocument()">Delete</button>
@@ -3444,6 +3444,7 @@ async function saveSPDocument(){
   const errEl = document.getElementById('spDocumentModalError');
   errEl.style.display = 'none';
   if(!name){ errEl.textContent = 'Document name is required.'; errEl.style.display = 'block'; return; }
+  if(!expiryDate){ errEl.textContent = 'Expiry date is required.'; errEl.style.display = 'block'; return; }
 
   if(id){
     const existing = spDocuments.find(d=>d.id===id);
@@ -3501,13 +3502,15 @@ async function saveSPDocument(){
 async function createDocumentExpiryTask(spId, documentName, expiryDate){
   const sp = serviceProviders.find(s=>s.id===spId);
   const spName = sp ? sp.name : 'service provider';
+  const reminderDate = new Date(expiryDate);
+  reminderDate.setDate(reminderDate.getDate() - 7);
   const { error } = await sb.from('tasks').insert({
     title: 'Renew "'+documentName+'" for '+spName,
     notes: 'Document expires ' + new Date(expiryDate).toLocaleDateString('en-GB') + '. Get an updated copy from the service provider.',
     assigned_to: currentUser.id,
     created_by: currentUser.id,
     status: 'todo',
-    due_date: expiryDate
+    due_date: reminderDate.toISOString().slice(0,10)
   });
   if(error){ showToast('Document saved, but the reminder task could not be created: ' + error.message, true); return; }
   await loadTasks();
@@ -4513,7 +4516,7 @@ function renderPubStandardDocsList(existingDocs){
     }else{
       html += '<div class="field"><label>'+escapeHtml(type.valueLabel||'Value')+(type.key==='waste_carriers_licence' ? ' *' : '')+'</label><input id="pubStdDocValue_'+type.key+'" value="'+escapeHtml((existing&&existing.text_value)||'')+'"></div>';
     }
-    html += '<div class="field"><label>Expiry date (optional)</label><input type="date" id="pubStdDocExpiry_'+type.key+'" value="'+((existing&&existing.expiry_date)||'')+'"></div>';
+    html += '<div class="field"><label>Expiry date *</label><input type="date" id="pubStdDocExpiry_'+type.key+'" value="'+((existing&&existing.expiry_date)||'')+'"></div>';
     html += '</div>';
     return html;
   }).join('');
@@ -4608,6 +4611,16 @@ async function savePublicOnboardForm(isFinal){
     if(!licenceValueEl || !licenceValueEl.value.trim()){
       fail('Waste carriers licence number is required — see the Documents section below.');
       return;
+    }
+    for(const type of SP_STANDARD_DOCUMENT_TYPES){
+      const expiryEl = document.getElementById('pubStdDocExpiry_'+type.key);
+      const hasContent = type.requiresFile
+        ? !!pubStandardDocFiles[type.key]
+        : !!(document.getElementById('pubStdDocValue_'+type.key) && document.getElementById('pubStdDocValue_'+type.key).value.trim());
+      if(hasContent && expiryEl && !expiryEl.value){
+        fail('Please enter an expiry date for ' + type.label + '.');
+        return;
+      }
     }
     if(!document.getElementById('pubInvoiceRecipientName').value.trim()){ fail('Invoice recipient name is required.', 'pubInvoiceRecipientName'); return; }
     if(!document.getElementById('pubInvoiceRecipientEmail').value.trim()){ fail('Invoice recipient email is required.', 'pubInvoiceRecipientEmail'); return; }
