@@ -751,6 +751,7 @@
         </div>
 
         <div id="spSubtab-wts" style="display:none;">
+          <button onclick="switchSPSubtab('recruitment')" style="margin-bottom:16px;width:auto;padding:9px 16px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:700;color:#1B1B1B;background:var(--brass);">Back to recruitment to confirm checks →</button>
           <div class="onboard-section" style="border-top:3px solid var(--brass);">
             <div class="onboard-section-head"><span class="onboard-section-title">Waste Carriers Licence</span></div>
             <div id="spWasteCarriersLicenceArea"></div>
@@ -2973,6 +2974,12 @@ function showServiceProvidersList(){
   updateAppHash({ view:'serviceproviders' });
 }
 
+function spCurrentStatusStage(sp){
+  const completed = new Set((sp && sp.recruitment_completed_stages) || []);
+  const nextIncomplete = SP_RECRUITMENT_STAGES.find(s=>!completed.has(s.key));
+  return nextIncomplete || SP_RECRUITMENT_STAGES[SP_RECRUITMENT_STAGES.length - 1];
+}
+
 function renderServiceProvidersList(){
   const q = (document.getElementById('spSearch').value || '').toLowerCase();
   const stageFilter = document.getElementById('spStageFilter').value;
@@ -2984,11 +2991,11 @@ function renderServiceProvidersList(){
   }else{
     filtered = filtered.filter(sp=>!sp.archived);
     if(stageFilter === 'not_live'){
-      filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') !== 'live');
+      filtered = filtered.filter(sp=>!sp.declined && spCurrentStatusStage(sp).key !== 'live');
     }else if(stageFilter === 'declined'){
       filtered = filtered.filter(sp=>sp.declined);
     }else if(stageFilter !== 'all'){
-      filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') === stageFilter);
+      filtered = filtered.filter(sp=>!sp.declined && spCurrentStatusStage(sp).key === stageFilter);
     }
   }
   filtered = filtered.sort((a,b)=>a.name.localeCompare(b.name));
@@ -2998,7 +3005,7 @@ function renderServiceProvidersList(){
   }
   let html = '<table class="qtable"><thead><tr><th>Company</th><th>Phone</th><th>Waste carriers licence</th><th>Status</th></tr></thead><tbody>';
   filtered.forEach(sp=>{
-    const stage = SP_RECRUITMENT_STAGES.find(s=>s.key===(sp.recruitment_stage||'prospect'));
+    const stage = spCurrentStatusStage(sp);
     html += '<tr onclick="openServiceProviderDetail(\''+sp.id+'\')" style="cursor:pointer;">';
     html += '<td><b>'+escapeHtml(sp.name)+'</b></td>';
     html += '<td>'+escapeHtml(sp.phone||'—')+'</td>';
@@ -3087,7 +3094,8 @@ async function openServiceProviderDetail(id){
   document.getElementById('spIntroMode').style.display = 'none';
   document.getElementById('spListMode').style.display = 'none';
   document.getElementById('spDetailMode').style.display = 'block';
-  const defaultSPTab = (row && row.recruitment_stage === 'live') ? 'details' : 'recruitment';
+  const isFullyOnboarded = row && (row.recruitment_completed_stages||[]).includes('live');
+  const defaultSPTab = isFullyOnboarded ? 'details' : 'recruitment';
   switchSPSubtab(defaultSPTab);
 
   currentSPServiceGroups = row ? (row.service_groups || []) : [];
@@ -4103,23 +4111,24 @@ function downloadSPPricingPdf(){
 /* ---- Recruitment / onboarding workflow ---- */
 function renderSPRecruitmentStageTracker(){
   const container = document.getElementById('spRecruitmentStageTracker');
-  const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
+  const sp = serviceProviders.find(s=>s.id===currentSPId);
+  const completedStages = (sp && sp.recruitment_completed_stages) || [];
   container.innerHTML = SP_RECRUITMENT_STAGES.map((s,i)=>{
-    const isDone = i < currentIndex;
-    const isCurrent = i === currentIndex;
+    const isDone = completedStages.includes(s.key);
+    const isViewing = s.key === currentSPRecruitmentStage;
     const isLast = i === SP_RECRUITMENT_STAGES.length - 1;
-    const circleColor = isDone ? 'var(--stamp-green)' : (isCurrent ? 'var(--brass)' : 'var(--paper-card-alt)');
-    const circleBorder = isDone ? 'var(--stamp-green)' : (isCurrent ? 'var(--brass)' : 'var(--border)');
-    const textColor = isDone ? 'var(--stamp-green)' : (isCurrent ? 'var(--ink)' : 'var(--slate)');
+    const circleColor = isDone ? 'var(--stamp-green)' : (isViewing ? 'var(--brass)' : 'var(--paper-card-alt)');
+    const circleBorder = isDone ? 'var(--stamp-green)' : (isViewing ? 'var(--brass)' : 'var(--border)');
+    const textColor = isDone ? 'var(--stamp-green)' : (isViewing ? 'var(--ink)' : 'var(--slate)');
     const lineColor = isDone ? 'var(--stamp-green)' : 'var(--border)';
     return '<div style="display:flex;gap:12px;align-items:flex-start;">'
       + '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">'
-      + '<span style="width:26px;height:26px;border-radius:50%;background:'+circleColor+';border:2px solid '+circleBorder+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:'+(isDone||isCurrent?'#fff':'var(--slate)')+';box-shadow:'+(isCurrent?'0 0 0 4px rgba(245,180,41,0.25)':'none')+';transition:box-shadow 0.3s ease;">'+(isDone?'✓':(i+1))+'</span>'
+      + '<span style="width:26px;height:26px;border-radius:50%;background:'+circleColor+';border:2px solid '+circleBorder+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:'+(isDone||isViewing?'#fff':'var(--slate)')+';box-shadow:'+(isViewing?'0 0 0 4px rgba(245,180,41,0.25)':'none')+';transition:box-shadow 0.3s ease;">'+(isDone?'✓':(i+1))+'</span>'
       + (isLast ? '' : '<div style="width:2px;flex:1;min-height:18px;background:'+lineColor+';"></div>')
       + '</div>'
       + '<span style="display:flex;align-items:center;gap:10px;padding-top:1px;padding-bottom:'+(isLast?'0':'14')+'px;flex-wrap:wrap;">'
-      + '<span style="font-size:13.5px;font-weight:'+(isCurrent?'700':'600')+';color:'+textColor+';">'+escapeHtml(s.label)+'</span>'
-      + (isCurrent && !isLast ? '<button onclick="advanceSPRecruitmentStage()" style="border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;color:#1B1B1B;background:var(--brass);">Complete</button>' : '')
+      + '<span onclick="setSPRecruitmentStage(\''+s.key+'\')" style="cursor:pointer;font-size:13.5px;font-weight:'+(isViewing?'700':'600')+';color:'+textColor+';'+(isViewing?'':'text-decoration:underline;text-decoration-color:var(--border);')+'">'+escapeHtml(s.label)+'</span>'
+      + (isViewing && !isDone ? '<button onclick="completeSPRecruitmentStage(\''+s.key+'\')" style="border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;color:#1B1B1B;background:var(--brass);">Complete</button>' : '')
       + '</span>'
       + '</div>';
   }).join('');
@@ -4179,12 +4188,11 @@ function renderSPRecruitmentGuidance(){
       html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ Every waste transfer station and the waste carriers licence have been confirmed.</p>';
     }
   }
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">';
-  html += currentIndex > 0 ? '<span onclick="moveSPRecruitmentStageBack()" style="cursor:pointer;color:var(--slate);font-size:12.5px;font-weight:600;">← Move back a stage</span>' : '<span></span>';
-  if(isLastStage){
+  html += '<div style="display:flex;justify-content:flex-end;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">';
+  const spForFooter = serviceProviders.find(x=>x.id===currentSPId);
+  const liveDone = spForFooter && (spForFooter.recruitment_completed_stages||[]).includes('live');
+  if(isLastStage && liveDone){
     html += '<span style="font-size:13px;color:var(--stamp-green);font-weight:700;">🎉 Fully onboarded!</span>';
-  }else{
-    html += '<span></span>';
   }
   html += '</div>';
   html += '</div>';
@@ -4208,7 +4216,8 @@ async function saveQuickProspect(){
     website: document.getElementById('spQuickWebsite').value.trim(),
     email: document.getElementById('spQuickEmail').value.trim(),
     county,
-    recruitment_stage: 'contacted'
+    recruitment_stage: 'contacted',
+    recruitment_completed_stages: ['prospect']
   };
   const { data, error } = await sb.from('service_providers').insert(payload).select().single();
   if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
@@ -4291,7 +4300,7 @@ function checkSPDuplicateByName(rawName, warningElId){
         }else if(sp.declined){
           extra = '<br><span style="color:var(--stamp-red);">Previously declined — '+escapeHtml(sp.declined_reason||'no reason given')+'</span>';
         }else{
-          const stage = SP_RECRUITMENT_STAGES.find(s=>s.key===(sp.recruitment_stage||'prospect'));
+          const stage = spCurrentStatusStage(sp);
           extra = '<br><span style="color:var(--slate);">Current status: '+escapeHtml(stage?stage.label:'Prospect')+'</span>';
         }
         return '<div style="margin-top:8px;"><span style="cursor:pointer;color:var(--brass);font-weight:600;" onclick="openServiceProviderDetail(\''+sp.id+'\')">'+escapeHtml(sp.name)+'</span>'+extra+'</div>';
@@ -4354,47 +4363,56 @@ function playSuccessChime(){
   }catch(e){ /* Web Audio not available — fail silently, no big deal */ }
 }
 
-async function advanceSPRecruitmentStage(){
-  const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
-  if(currentIndex < 0 || currentIndex >= SP_RECRUITMENT_STAGES.length - 1) return;
+async function completeSPRecruitmentStage(stageKey){
+  if(!currentSPId) return;
+  const sp = serviceProviders.find(s=>s.id===currentSPId);
+  if(!sp) return;
 
-  if(currentSPRecruitmentStage === 'reviewing'){
+  if(stageKey === 'reviewing'){
     const missing = computeMissingSPOnboardingFields();
     if(missing.length > 0){
-      showToast('Can\'t move on yet — still missing: ' + missing.join(', '), true);
+      showToast('Can\'t complete this yet — still missing: ' + missing.join(', '), true);
       return;
     }
   }
 
-  if(currentSPRecruitmentStage === 'link_sent'){
-    const sp = serviceProviders.find(s=>s.id===currentSPId);
-    if(!sp || !sp.info_pricing_email_sent_at){
-      showToast('Send the info & pricing email before moving on.', true);
+  if(stageKey === 'link_sent'){
+    if(!sp.info_pricing_email_sent_at){
+      showToast('Send the info & pricing email before completing this stage.', true);
       return;
     }
   }
 
-  if(currentSPRecruitmentStage === 'wts_check'){
+  if(stageKey === 'wts_check'){
     const unconfirmed = computeUnconfirmedWasteStations();
     if(unconfirmed.length > 0){
-      showToast('Confirm the licence check for every waste transfer station before moving on — ' + unconfirmed.length + ' still need it.', true);
+      showToast('Confirm the licence check for every waste transfer station first — ' + unconfirmed.length + ' still need it.', true);
       return;
     }
-    const sp = serviceProviders.find(s=>s.id===currentSPId);
-    if(!sp || !sp.waste_carriers_licence_confirmed_at){
-      showToast('Confirm the waste carriers licence check before moving on.', true);
+    if(!sp.waste_carriers_licence_confirmed_at){
+      showToast('Confirm the waste carriers licence check first.', true);
       return;
     }
   }
 
-  await setSPRecruitmentStage(SP_RECRUITMENT_STAGES[currentIndex + 1].key);
-  playSuccessChime();
-}
+  if(stageKey === 'live'){
+    const completed = new Set(sp.recruitment_completed_stages || []);
+    const stillNeeded = SP_RECRUITMENT_STAGES.filter(s=>s.key !== 'live' && !completed.has(s.key));
+    if(stillNeeded.length > 0){
+      showToast('Every other stage needs completing first — still needed: ' + stillNeeded.map(s=>s.label).join(', '), true);
+      return;
+    }
+  }
 
-async function moveSPRecruitmentStageBack(){
-  const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
-  if(currentIndex <= 0) return;
-  await setSPRecruitmentStage(SP_RECRUITMENT_STAGES[currentIndex - 1].key);
+  const completedStages = new Set(sp.recruitment_completed_stages || []);
+  completedStages.add(stageKey);
+  const { error } = await sb.from('service_providers').update({ recruitment_completed_stages: Array.from(completedStages) }).eq('id', currentSPId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadServiceProviders();
+  renderSPRecruitmentStageTracker();
+  renderSPRecruitmentGuidance();
+  playSuccessChime();
+  showToast(stageKey === 'live' ? 'Fully onboarded — live!' : 'Stage marked complete.');
 }
 
 async function loadSPOnboardingLinks(spId){
