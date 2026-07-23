@@ -628,7 +628,7 @@
             <option value="pricing_setup">Pricing set up</option>
             <option value="link_sent">Info &amp; pricing email</option>
             <option value="reviewing">Reviewing their info</option>
-            <option value="wts_check">Checked WTS licence</option>
+            <option value="wts_check">Waste certification checks</option>
             <option value="wapp_entry">Entered on Wapp</option>
             <option value="live">Live</option>
           </select>
@@ -660,7 +660,7 @@
           <span class="subtab active" data-sptab="details" onclick="switchSPSubtab('details')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Details</span>
           <span class="subtab" data-sptab="documents" onclick="switchSPSubtab('documents')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Documents</span>
           <span class="subtab" data-sptab="team" onclick="switchSPSubtab('team')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Team members</span>
-          <span class="subtab" data-sptab="wts" onclick="switchSPSubtab('wts')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Waste transfer stations</span>
+          <span class="subtab" data-sptab="wts" onclick="switchSPSubtab('wts')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Waste certification</span>
           <span class="subtab" data-sptab="pricing" onclick="switchSPSubtab('pricing')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Pricing</span>
         </div>
 
@@ -751,8 +751,15 @@
         </div>
 
         <div id="spSubtab-wts" style="display:none;">
-          <button class="btn small" style="margin-bottom:14px;" onclick="openSPWasteStationModal()">+ Add waste transfer station</button>
-          <div id="spWasteStationsList"></div>
+          <div class="onboard-section" style="border-top:3px solid var(--brass);">
+            <div class="onboard-section-head"><span class="onboard-section-title">Waste Carriers Licence</span></div>
+            <div id="spWasteCarriersLicenceArea"></div>
+          </div>
+
+          <div class="onboard-section" style="border-top:3px solid var(--brass);">
+            <div class="onboard-section-head"><span class="onboard-section-title">Waste transfer stations</span><button class="btn ghost small" onclick="openSPWasteStationModal()">+ Add waste transfer station</button></div>
+            <div id="spWasteStationsList"></div>
+          </div>
         </div>
 
         <div id="spSubtab-pricing" style="display:none;">
@@ -1292,8 +1299,8 @@ const SP_RECRUITMENT_STAGES = [
     guidance: 'Once they\'ve submitted the form, their answers appear directly in the Details, Team members, Waste transfer stations, and Documents tabs on this page — check those over. Chase them if anything important is still missing.'
   },
   {
-    key: 'wts_check', label: 'Checked waste transfer station licence',
-    guidance: 'Check the waste transfer station licence they\'ve provided is genuine and current using the Environment Agency\'s public register: https://environment.data.gov.uk/public-register/view/search-all\n\nOnce you\'re satisfied it checks out, tick this stage off.'
+    key: 'wts_check', label: 'Waste certification checks',
+    guidance: 'Head to the Waste certification tab and confirm two things: the waste transfer station licence for each site they use, and their waste carriers licence — both checked against the Environment Agency\'s public register. Once everything\'s confirmed there, tick this stage off.'
   },
   {
     key: 'wapp_entry', label: 'Entered on Wapp',
@@ -3402,7 +3409,7 @@ function renderSPDocuments(){
   }
   const today = new Date().toISOString().slice(0,10);
   let html = '<p style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);margin:0 0 8px;">Standard documents</p>';
-  SP_STANDARD_DOCUMENT_TYPES.forEach(type=>{
+  SP_STANDARD_DOCUMENT_TYPES.filter(type=>type.key !== 'waste_carriers_licence').forEach(type=>{
     const doc = spDocuments.find(d=>d.document_type===type.key);
     if(!doc){
       html += '<div class="doc-row">';
@@ -3653,6 +3660,52 @@ async function loadSPWasteStations(spId){
   if(error){ showToast('Could not load waste transfer stations: ' + error.message, true); return; }
   spWasteStations = data || [];
   renderSPWasteStations();
+  renderSPWasteCarriersLicenceArea();
+}
+
+function renderSPWasteCarriersLicenceArea(){
+  const container = document.getElementById('spWasteCarriersLicenceArea');
+  if(!container) return;
+  if(!currentSPId){
+    container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first.</p>';
+    return;
+  }
+  const doc = spDocuments.find(d=>d.document_type==='waste_carriers_licence');
+  const sp = serviceProviders.find(s=>s.id===currentSPId);
+  let html = '';
+  if(doc && doc.text_value){
+    html += '<p style="font-size:13px;margin:0 0 4px;"><b>Licence number:</b> '+escapeHtml(doc.text_value)+'</p>';
+    html += '<p style="font-size:12.5px;color:var(--slate);margin:0 0 12px;">'+(doc.expiry_date ? 'Expires '+new Date(doc.expiry_date).toLocaleDateString('en-GB') : 'No expiry date on file')+'</p>';
+  }else{
+    html += '<p style="font-size:13px;color:var(--slate);margin:0 0 12px;">No waste carriers licence number on file yet — this comes from the provider\'s onboarding form.</p>';
+  }
+  if(sp && sp.waste_carriers_licence_confirmed_at){
+    const confirmer = teamMembers.find(m=>m.id===sp.waste_carriers_licence_confirmed_by);
+    html += '<p style="font-size:12px;color:var(--stamp-green);margin:0;">✓ Licence checked against the Environment Agency register — confirmed by '+escapeHtml(confirmer ? (confirmer.name||confirmer.email) : 'a team member')+' on '+new Date(sp.waste_carriers_licence_confirmed_at).toLocaleDateString('en-GB')+' at '+new Date(sp.waste_carriers_licence_confirmed_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</p>';
+  }else{
+    html += '<a href="https://environment.data.gov.uk/public-register/view/search-waste-carriers-brokers" target="_blank" rel="noopener" style="display:inline-block;font-size:12.5px;color:var(--brass);font-weight:600;margin-bottom:8px;">Check this licence on the Environment Agency\'s public register →</a><br>';
+    html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;">';
+    html += '<input type="checkbox" onclick="confirmSPWasteCarriersLicence()" style="margin-top:2px;">';
+    html += '<span>I\'ve checked this company\'s waste carriers licence against the Environment Agency\'s public register and confirm it is valid.</span>';
+    html += '</label>';
+  }
+  container.innerHTML = html;
+}
+
+async function confirmSPWasteCarriersLicence(){
+  if(!currentSPId) return;
+  if(!confirm('Confirm you\'ve checked this company\'s waste carriers licence on the Environment Agency\'s public register, and it\'s valid?')){
+    renderSPWasteCarriersLicenceArea();
+    return;
+  }
+  const { error } = await sb.from('service_providers').update({
+    waste_carriers_licence_confirmed_by: currentUser.id, waste_carriers_licence_confirmed_at: new Date().toISOString()
+  }).eq('id', currentSPId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadServiceProviders();
+  renderSPWasteCarriersLicenceArea();
+  renderSPRecruitmentGuidance();
+  showToast('Waste carriers licence check confirmed.');
 }
 
 function renderSPWasteStations(){
@@ -4114,12 +4167,16 @@ function renderSPRecruitmentGuidance(){
   }
   if(stage.key === 'wts_check'){
     const unconfirmed = computeUnconfirmedWasteStations();
+    const sp = serviceProviders.find(s=>s.id===currentSPId);
+    const carriersLicenceConfirmed = sp && sp.waste_carriers_licence_confirmed_at;
     if(spWasteStations.length === 0){
-      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>No waste transfer stations added yet</b> — add at least one on the Waste transfer stations tab before this can move on.</div>';
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>No waste transfer stations added yet</b> — add at least one on the Waste certification tab before this can move on.</div>';
     }else if(unconfirmed.length > 0){
       html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>'+unconfirmed.length+' waste transfer station'+(unconfirmed.length===1?'':'s')+' still need'+(unconfirmed.length===1?'s':'')+' the licence check confirmed:</b><ul>'+unconfirmed.map(w=>'<li>'+escapeHtml(w.station_name)+'</li>').join('')+'</ul></div>';
+    }else if(!carriersLicenceConfirmed){
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>Waste carriers licence still needs the check confirmed</b> — see the Waste certification tab.</div>';
     }else{
-      html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ Every waste transfer station has been confirmed.</p>';
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ Every waste transfer station and the waste carriers licence have been confirmed.</p>';
     }
   }
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">';
@@ -4321,6 +4378,11 @@ async function advanceSPRecruitmentStage(){
     const unconfirmed = computeUnconfirmedWasteStations();
     if(unconfirmed.length > 0){
       showToast('Confirm the licence check for every waste transfer station before moving on — ' + unconfirmed.length + ' still need it.', true);
+      return;
+    }
+    const sp = serviceProviders.find(s=>s.id===currentSPId);
+    if(!sp || !sp.waste_carriers_licence_confirmed_at){
+      showToast('Confirm the waste carriers licence check before moving on.', true);
       return;
     }
   }
