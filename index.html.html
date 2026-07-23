@@ -3622,12 +3622,38 @@ function renderSPWasteStations(){
   let html = '';
   spWasteStations.forEach(w=>{
     const address = [w.address_line1, w.address_line2, w.city, w.county, w.postcode].filter(Boolean).join(', ');
-    html += '<div class="doc-row" style="cursor:pointer;" onclick="openSPWasteStationModal(\''+w.id+'\')">';
+    html += '<div class="doc-row" style="flex-direction:column;align-items:stretch;">';
+    html += '<div style="display:flex;justify-content:space-between;cursor:pointer;" onclick="openSPWasteStationModal(\''+w.id+'\')">';
     html += '<div><div class="doc-row-name">'+escapeHtml(w.station_name)+'</div>';
     html += '<div class="doc-row-meta">'+(address ? escapeHtml(address) : 'No address on file')+(w.licence_number ? ' · Licence: '+escapeHtml(w.licence_number) : '')+'</div></div>';
     html += '</div>';
+    if(w.licence_confirmed_at){
+      const confirmer = teamMembers.find(m=>m.id===w.licence_confirmed_by);
+      html += '<p style="font-size:12px;color:var(--stamp-green);margin:8px 0 0;">✓ Licence checked against the Environment Agency register — confirmed by '+escapeHtml(confirmer ? (confirmer.name||confirmer.email) : 'a team member')+' on '+new Date(w.licence_confirmed_at).toLocaleDateString('en-GB')+'</p>';
+    }else{
+      html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">';
+      html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;">';
+      html += '<input type="checkbox" onclick="event.stopPropagation();confirmSPWasteStationLicence(\''+w.id+'\')" style="margin-top:2px;">';
+      html += '<span>I\'ve checked this site against the Environment Agency\'s public register and confirm the licence is valid and permits our service providers to tip waste here.</span>';
+      html += '</label></div>';
+    }
+    html += '</div>';
   });
   container.innerHTML = html;
+}
+
+async function confirmSPWasteStationLicence(stationId){
+  if(!confirm('Confirm you\'ve checked this site\'s licence on the Environment Agency\'s public register, and it permits our service providers to tip waste here?')) {
+    renderSPWasteStations(); // reset the checkbox visually since they cancelled
+    return;
+  }
+  const { error } = await sb.from('service_provider_waste_stations').update({
+    licence_confirmed_by: currentUser.id, licence_confirmed_at: new Date().toISOString()
+  }).eq('id', stationId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadSPWasteStations(currentSPId);
+  renderSPRecruitmentGuidance();
+  showToast('Licence check confirmed.');
 }
 
 function openSPWasteStationModal(id){
@@ -4010,6 +4036,24 @@ function renderSPRecruitmentGuidance(){
       html += '<p style="font-size:12px;color:var(--slate);margin:8px 0 0;">Sent by '+escapeHtml(sender ? (sender.name||sender.email) : 'a team member')+' on '+new Date(sp.info_pricing_email_sent_at).toLocaleDateString('en-GB')+'</p>';
     }
   }
+  if(stage.key === 'reviewing'){
+    const missing = computeMissingSPOnboardingFields();
+    if(missing.length > 0){
+      html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>Still needed before this can move on:</b><ul>'+missing.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul></div>';
+    }else{
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);margin-top:12px;">✓ Everything required has been filled in.</p>';
+    }
+  }
+  if(stage.key === 'wts_check'){
+    const unconfirmed = computeUnconfirmedWasteStations();
+    if(spWasteStations.length === 0){
+      html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>No waste transfer stations added yet</b> — add at least one on the Waste transfer stations tab before this can move on.</div>';
+    }else if(unconfirmed.length > 0){
+      html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>'+unconfirmed.length+' waste transfer station'+(unconfirmed.length===1?'':'s')+' still need'+(unconfirmed.length===1?'s':'')+' the licence check confirmed:</b><ul>'+unconfirmed.map(w=>'<li>'+escapeHtml(w.station_name)+'</li>').join('')+'</ul></div>';
+    }else{
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);margin-top:12px;">✓ Every waste transfer station has been confirmed.</p>';
+    }
+  }
   html += '<div style="display:flex;gap:8px;margin-top:12px;">';
   if(currentIndex > 0){
     html += '<button class="btn ghost small" onclick="moveSPRecruitmentStageBack()">← Move back a stage</button>';
@@ -4118,9 +4162,59 @@ function checkSPDuplicateByName(rawName, warningElId){
     + '</div>';
 }
 
+function computeMissingSPOnboardingFields(){
+  const sp = serviceProviders.find(s=>s.id===currentSPId);
+  if(!sp) return ['Service provider not found'];
+  const missing = [];
+  if(!sp.name) missing.push('Company name');
+  if(!sp.address_line1) missing.push('Address line 1');
+  if(!sp.city) missing.push('City');
+  if(!sp.county) missing.push('County');
+  if(!sp.postcode) missing.push('Postcode');
+  if(!sp.email) missing.push('Email');
+  if(!sp.phone) missing.push('Phone');
+  if(sp.vat_registered === null || sp.vat_registered === undefined) missing.push('Whether they\'re VAT registered');
+  else if(sp.vat_registered && !sp.vat_number) missing.push('VAT number');
+  else if(!sp.vat_registered && !sp.utr_number) missing.push('UTR number');
+  if(!sp.business_type) missing.push('Sole trader or registered company');
+  else if(sp.business_type === 'company' && !sp.company_number) missing.push('Company number');
+
+  if(spTeamMembers.length === 0) missing.push('At least one team member');
+  if(spWasteStations.length === 0) missing.push('At least one waste transfer station');
+
+  SP_STANDARD_DOCUMENT_TYPES.forEach(type=>{
+    const doc = spDocuments.find(d=>d.document_type===type.key);
+    const hasIt = doc && (type.requiresFile ? doc.file_path : doc.text_value);
+    if(!hasIt) missing.push(type.label);
+  });
+
+  return missing;
+}
+
+function computeUnconfirmedWasteStations(){
+  return spWasteStations.filter(w=>!w.licence_confirmed_at);
+}
+
 async function advanceSPRecruitmentStage(){
   const currentIndex = SP_RECRUITMENT_STAGES.findIndex(s=>s.key===currentSPRecruitmentStage);
   if(currentIndex < 0 || currentIndex >= SP_RECRUITMENT_STAGES.length - 1) return;
+
+  if(currentSPRecruitmentStage === 'reviewing'){
+    const missing = computeMissingSPOnboardingFields();
+    if(missing.length > 0){
+      showToast('Can\'t move on yet — still missing: ' + missing.join(', '), true);
+      return;
+    }
+  }
+
+  if(currentSPRecruitmentStage === 'wts_check'){
+    const unconfirmed = computeUnconfirmedWasteStations();
+    if(unconfirmed.length > 0){
+      showToast('Confirm the licence check for every waste transfer station before moving on — ' + unconfirmed.length + ' still need it.', true);
+      return;
+    }
+  }
+
   await setSPRecruitmentStage(SP_RECRUITMENT_STAGES[currentIndex + 1].key);
 }
 
