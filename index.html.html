@@ -4098,7 +4098,9 @@ function renderSPRecruitmentGuidance(){
     const sp = serviceProviders.find(s=>s.id===currentSPId);
     if(sp && sp.info_pricing_email_sent_at){
       const sender = teamMembers.find(m=>m.id===sp.info_pricing_email_sent_by);
-      html += '<p style="font-size:12px;color:var(--slate);margin:8px 0 0;">Sent by '+escapeHtml(sender ? (sender.name||sender.email) : 'a team member')+' on '+new Date(sp.info_pricing_email_sent_at).toLocaleDateString('en-GB')+'</p>';
+      html += '<p style="font-size:12px;color:var(--stamp-green);margin:8px 0 0;">✓ Sent by '+escapeHtml(sender ? (sender.name||sender.email) : 'a team member')+' on '+new Date(sp.info_pricing_email_sent_at).toLocaleDateString('en-GB')+' at '+new Date(sp.info_pricing_email_sent_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</p>';
+    }else{
+      html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>Not sent yet</b> — this needs to be sent before moving on to the next stage.</div>';
     }
   }
   if(stage.key === 'pricing_setup'){
@@ -4309,6 +4311,14 @@ async function advanceSPRecruitmentStage(){
     }
   }
 
+  if(currentSPRecruitmentStage === 'link_sent'){
+    const sp = serviceProviders.find(s=>s.id===currentSPId);
+    if(!sp || !sp.info_pricing_email_sent_at){
+      showToast('Send the info & pricing email before moving on.', true);
+      return;
+    }
+  }
+
   if(currentSPRecruitmentStage === 'wts_check'){
     const unconfirmed = computeUnconfirmedWasteStations();
     if(unconfirmed.length > 0){
@@ -4364,6 +4374,10 @@ async function sendSPInfoPricingEmail(){
 
   const pdfString = buildSPPricingPdfString(sp);
   if(!pdfString){ showToast('No included pricing lines to send — set up their pricing first.', true); return; }
+
+  if(!confirm('Confirm this email address is correct before sending:\n\n' + sp.email + '\n\nSelect OK to send, or Cancel to go check it on the Details tab.')){
+    return;
+  }
 
   const btn = document.getElementById('sendSPInfoPricingEmailBtn');
   if(btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
@@ -5816,4 +5830,3 @@ function quoteRefLabel(q){
 
 </body>
 </html>
-
