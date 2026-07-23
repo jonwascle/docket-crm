@@ -623,6 +623,7 @@
             <option value="all">Everyone</option>
             <option value="not_live">In progress (not live yet)</option>
             <option value="declined">Declined only</option>
+            <option value="archived">Archived only</option>
             <option value="prospect">Prospect</option>
             <option value="contacted">Call them</option>
             <option value="pricing_setup">Pricing set up</option>
@@ -727,7 +728,11 @@
           <div class="field"><label>Notes</label><textarea id="spNotes"></textarea></div>
 
           <div class="modal-actions" style="max-width:none;margin:0 0 30px;">
-            <button class="btn danger small" id="spDeleteBtn" style="display:none;" onclick="deleteServiceProvider()">Delete service provider</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn ghost small" id="spArchiveBtn" style="display:none;" onclick="archiveServiceProvider()">Archive service provider</button>
+              <button class="btn ghost small" id="spUnarchiveBtn" style="display:none;" onclick="unarchiveServiceProvider()">Unarchive — bring back</button>
+              <button class="btn danger small" id="spDeleteBtn" style="display:none;" onclick="deleteServiceProvider()">Delete permanently</button>
+            </div>
             <div class="right">
               <button class="btn small" onclick="saveServiceProvider()">Save details</button>
             </div>
@@ -2965,11 +2970,13 @@ function renderServiceProvidersList(){
   const container = document.getElementById('spListContainer');
   let filtered = serviceProviders.filter(sp=>!q || sp.name.toLowerCase().includes(q));
   if(stageFilter === 'not_live'){
-    filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') !== 'live');
+    filtered = filtered.filter(sp=>!sp.declined && !sp.archived && (sp.recruitment_stage||'prospect') !== 'live');
   }else if(stageFilter === 'declined'){
     filtered = filtered.filter(sp=>sp.declined);
+  }else if(stageFilter === 'archived'){
+    filtered = filtered.filter(sp=>sp.archived);
   }else if(stageFilter !== 'all'){
-    filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') === stageFilter);
+    filtered = filtered.filter(sp=>!sp.declined && !sp.archived && (sp.recruitment_stage||'prospect') === stageFilter);
   }
   filtered = filtered.sort((a,b)=>a.name.localeCompare(b.name));
   if(filtered.length===0){
@@ -2983,7 +2990,9 @@ function renderServiceProvidersList(){
     html += '<td><b>'+escapeHtml(sp.name)+'</b></td>';
     html += '<td>'+escapeHtml(sp.phone||'—')+'</td>';
     html += '<td>'+escapeHtml(sp.waste_carriers_licence_number||'—')+'</td>';
-    html += '<td>'+(sp.declined
+    html += '<td>'+(sp.archived
+      ? '<span class="badge" style="background:var(--paper-card-alt);color:var(--slate);">Archived</span>'
+      : sp.declined
       ? '<span class="badge" style="background:var(--stamp-red-bg);color:var(--stamp-red);">Declined</span>'
       : '<span class="badge">'+escapeHtml(stage ? stage.label : 'Prospect')+'</span>')+'</td>';
     html += '</tr>';
@@ -3050,7 +3059,9 @@ async function openServiceProviderDetail(id){
   document.getElementById('spNotes').value = row ? (row.notes||'') : '';
   onSPVatToggleChange();
   onSPBusinessTypeChange();
-  document.getElementById('spDeleteBtn').style.display = row ? 'inline-flex' : 'none';
+  document.getElementById('spArchiveBtn').style.display = (row && !row.archived) ? 'inline-flex' : 'none';
+  document.getElementById('spUnarchiveBtn').style.display = (row && row.archived) ? 'inline-flex' : 'none';
+  document.getElementById('spDeleteBtn').style.display = (row && currentProfile.role === 'admin') ? 'inline-flex' : 'none';
 
   currentSPPostcodeAreas = [];
   if(id){
@@ -3323,7 +3334,9 @@ async function saveServiceProvider(silent){
 
   await loadServiceProviders();
   document.getElementById('spDetailTitle').textContent = name;
-  document.getElementById('spDeleteBtn').style.display = 'inline-flex';
+  document.getElementById('spArchiveBtn').style.display = 'inline-flex';
+  document.getElementById('spUnarchiveBtn').style.display = 'none';
+  document.getElementById('spDeleteBtn').style.display = currentProfile.role === 'admin' ? 'inline-flex' : 'none';
   if(!silent) showToast('Service provider saved.');
   await loadSPDocuments(id);
   await loadSPTeamMembers(id);
@@ -3332,9 +3345,31 @@ async function saveServiceProvider(silent){
   await loadSPOnboardingLinks(id);
 }
 
+async function archiveServiceProvider(){
+  if(!currentSPId) return;
+  if(!confirm('Archive this service provider? They\'ll be kept on file but won\'t show as an active option — and we\'ll be warned if we try to add them again. You can bring them back any time.')) return;
+  const { error } = await sb.from('service_providers').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', currentSPId);
+  if(error){ showToast('Could not archive: ' + error.message, true); return; }
+  await loadServiceProviders();
+  showToast('Service provider archived.');
+  showServiceProvidersList();
+}
+
+async function unarchiveServiceProvider(){
+  if(!currentSPId) return;
+  const { error } = await sb.from('service_providers').update({ archived: false, archived_at: null }).eq('id', currentSPId);
+  if(error){ showToast('Could not unarchive: ' + error.message, true); return; }
+  await loadServiceProviders();
+  const row = serviceProviders.find(s=>s.id===currentSPId);
+  document.getElementById('spArchiveBtn').style.display = 'inline-flex';
+  document.getElementById('spUnarchiveBtn').style.display = 'none';
+  showToast('Service provider brought back — no longer archived.');
+}
+
 async function deleteServiceProvider(){
   if(!currentSPId) return;
-  if(!confirm('Delete this service provider? This will also delete all their documents, team members, and waste transfer stations. This cannot be undone.')) return;
+  if(currentProfile.role !== 'admin'){ showToast('Only admins can permanently delete a service provider.', true); return; }
+  if(!confirm('Permanently delete this service provider? This will also delete all their documents, team members, and waste transfer stations. This cannot be undone — if you just want to stop working with them, use Archive instead.')) return;
   for(const doc of spDocuments){
     if(doc.file_path){
       await sb.storage.from('service-provider-documents').remove([doc.file_path]);
@@ -4184,7 +4219,9 @@ function checkSPDuplicateByName(rawName, warningElId){
     + '<b style="color:var(--stamp-red);">We may have contacted this company before:</b>'
     + matches.map(sp=>{
         let extra;
-        if(sp.declined){
+        if(sp.archived){
+          extra = '<br><span style="color:var(--slate);">Archived'+(sp.archived_at ? ' on ' + new Date(sp.archived_at).toLocaleDateString('en-GB') : '')+' — no longer an active provider</span>';
+        }else if(sp.declined){
           extra = '<br><span style="color:var(--stamp-red);">Previously declined — '+escapeHtml(sp.declined_reason||'no reason given')+'</span>';
         }else{
           const stage = SP_RECRUITMENT_STAGES.find(s=>s.key===(sp.recruitment_stage||'prospect'));
