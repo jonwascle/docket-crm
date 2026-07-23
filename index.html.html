@@ -3407,6 +3407,7 @@ async function loadSPDocuments(spId){
   if(error){ showToast('Could not load documents: ' + error.message, true); return; }
   spDocuments = data || [];
   renderSPDocuments();
+  renderSPWasteCarriersLicenceArea();
 }
 
 function renderSPDocuments(){
@@ -3685,7 +3686,8 @@ function renderSPWasteCarriersLicenceArea(){
     html += '<p style="font-size:13px;margin:0 0 4px;"><b>Licence number:</b> '+escapeHtml(doc.text_value)+'</p>';
     html += '<p style="font-size:12.5px;color:var(--slate);margin:0 0 12px;">'+(doc.expiry_date ? 'Expires '+new Date(doc.expiry_date).toLocaleDateString('en-GB') : 'No expiry date on file')+'</p>';
   }else{
-    html += '<p style="font-size:13px;color:var(--slate);margin:0 0 12px;">No waste carriers licence number on file yet — this comes from the provider\'s onboarding form.</p>';
+    html += '<p style="font-size:13px;color:var(--slate);margin:0 0 12px;">No waste carriers licence number on file yet — this normally comes from the provider\'s onboarding form, but you can enter it here if you have it.</p>';
+    html += '<button class="btn ghost small" onclick="openSPDocumentModal(null, \'waste_carriers_licence\')" style="margin-bottom:12px;">Enter licence number manually</button>';
   }
   if(sp && sp.waste_carriers_licence_confirmed_at){
     const confirmer = teamMembers.find(m=>m.id===sp.waste_carriers_licence_confirmed_by);
@@ -4165,6 +4167,12 @@ function renderSPRecruitmentGuidance(){
   }
   if(stage.key === 'pricing_setup'){
     html += '<button class="btn small" onclick="switchSPSubtab(\'pricing\')" style="margin-top:14px;">Set up pricing →</button>';
+    const activePricing = spVisiblePricingRows().filter(r=>r.is_active !== false);
+    if(currentSPServiceGroups.length === 0 || activePricing.length === 0){
+      html += '<div class="missing-fields-banner" style="margin-top:14px;"><b>No pricing set up yet</b> — at least one price is needed before this can be completed.</div>';
+    }else{
+      html += '<p style="font-size:12.5px;color:var(--stamp-green);font-weight:600;margin-top:14px;">✓ '+activePricing.length+' price'+(activePricing.length===1?'':'s')+' set up.</p>';
+    }
   }
   if(stage.key === 'reviewing'){
     const missing = computeMissingSPOnboardingFields();
@@ -4391,6 +4399,14 @@ async function completeSPRecruitmentStage(stageKey){
   if(!currentSPId) return;
   const sp = serviceProviders.find(s=>s.id===currentSPId);
   if(!sp) return;
+
+  if(stageKey === 'pricing_setup'){
+    const activePricing = spVisiblePricingRows().filter(r=>r.is_active !== false);
+    if(currentSPServiceGroups.length === 0 || activePricing.length === 0){
+      showToast('Set up at least one price on the Pricing tab before completing this stage.', true);
+      return;
+    }
+  }
 
   if(stageKey === 'reviewing'){
     const missing = computeMissingSPOnboardingFields();
@@ -6177,3 +6193,5 @@ function quoteRefLabel(q){
 
 </body>
 </html>
+
+  
