@@ -4004,6 +4004,11 @@ function renderSPRecruitmentGuidance(){
   html += '<div class="script-box">'+escapeHtml(stage.guidance)+'</div>';
   if(stage.key === 'link_sent'){
     html += '<button class="btn small" id="sendSPInfoPricingEmailBtn" onclick="sendSPInfoPricingEmail()" style="margin-top:12px;">Send info &amp; pricing email</button>';
+    const sp = serviceProviders.find(s=>s.id===currentSPId);
+    if(sp && sp.info_pricing_email_sent_at){
+      const sender = teamMembers.find(m=>m.id===sp.info_pricing_email_sent_by);
+      html += '<p style="font-size:12px;color:var(--slate);margin:8px 0 0;">Sent by '+escapeHtml(sender ? (sender.name||sender.email) : 'a team member')+' on '+new Date(sp.info_pricing_email_sent_at).toLocaleDateString('en-GB')+'</p>';
+    }
   }
   html += '<div style="display:flex;gap:8px;margin-top:12px;">';
   if(currentIndex > 0){
@@ -4192,6 +4197,9 @@ async function sendSPInfoPricingEmail(){
       showToast('Could not send email: ' + (data.error || res.statusText), true);
       return;
     }
+    await sb.from('service_providers').update({ info_pricing_email_sent_by: currentUser.id, info_pricing_email_sent_at: new Date().toISOString() }).eq('id', currentSPId);
+    await loadServiceProviders();
+    renderSPRecruitmentGuidance();
     showToast('Info & pricing email sent to ' + sp.email + '.');
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = 'Send info & pricing email'; }
