@@ -617,13 +617,12 @@
           </div>
         </div>
         <input class="search-input" id="spSearch" placeholder="Search by company name" oninput="renderServiceProvidersList()">
-        <div style="display:flex;gap:10px;align-items:center;margin:10px 0 14px;">
+        <div style="display:flex;gap:10px;align-items:center;margin:10px 0 14px;flex-wrap:wrap;">
           <label style="font-size:12.5px;font-weight:600;color:var(--slate);">Show:</label>
           <select id="spStageFilter" onchange="renderServiceProvidersList()" style="max-width:260px;">
             <option value="all">Everyone</option>
             <option value="not_live">In progress (not live yet)</option>
             <option value="declined">Declined only</option>
-            <option value="archived">Archived only</option>
             <option value="prospect">Prospect</option>
             <option value="contacted">Call them</option>
             <option value="pricing_setup">Pricing set up</option>
@@ -633,6 +632,9 @@
             <option value="wapp_entry">Entered on Wapp</option>
             <option value="live">Live</option>
           </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--slate);cursor:pointer;">
+            <input type="checkbox" id="spShowArchivedToggle" onchange="renderServiceProvidersList()"> Show archived
+          </label>
         </div>
         <div id="spListContainer"></div>
       </div>
@@ -769,6 +771,7 @@
             <button class="btn small" onclick="downloadSPPricingPdf()" style="margin-bottom:14px;">Download pricing PDF</button>
           </div>
           <div id="spPricingListContainer" style="max-height:calc(100vh - 400px);overflow-y:auto;"></div>
+          <button class="btn" onclick="switchSPSubtab('recruitment')" style="width:auto;padding:12px 24px;margin-top:16px;">Done — back to recruitment →</button>
         </div>
 
         <div id="spSubtab-recruitment" style="display:none;">
@@ -2967,16 +2970,20 @@ function showServiceProvidersList(){
 function renderServiceProvidersList(){
   const q = (document.getElementById('spSearch').value || '').toLowerCase();
   const stageFilter = document.getElementById('spStageFilter').value;
+  const showArchived = document.getElementById('spShowArchivedToggle').checked;
   const container = document.getElementById('spListContainer');
   let filtered = serviceProviders.filter(sp=>!q || sp.name.toLowerCase().includes(q));
-  if(stageFilter === 'not_live'){
-    filtered = filtered.filter(sp=>!sp.declined && !sp.archived && (sp.recruitment_stage||'prospect') !== 'live');
-  }else if(stageFilter === 'declined'){
-    filtered = filtered.filter(sp=>sp.declined);
-  }else if(stageFilter === 'archived'){
+  if(showArchived){
     filtered = filtered.filter(sp=>sp.archived);
-  }else if(stageFilter !== 'all'){
-    filtered = filtered.filter(sp=>!sp.declined && !sp.archived && (sp.recruitment_stage||'prospect') === stageFilter);
+  }else{
+    filtered = filtered.filter(sp=>!sp.archived);
+    if(stageFilter === 'not_live'){
+      filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') !== 'live');
+    }else if(stageFilter === 'declined'){
+      filtered = filtered.filter(sp=>sp.declined);
+    }else if(stageFilter !== 'all'){
+      filtered = filtered.filter(sp=>!sp.declined && (sp.recruitment_stage||'prospect') === stageFilter);
+    }
   }
   filtered = filtered.sort((a,b)=>a.name.localeCompare(b.name));
   if(filtered.length===0){
