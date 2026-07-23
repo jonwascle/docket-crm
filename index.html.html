@@ -675,7 +675,6 @@
             <div class="field"><label>County</label><input id="spCounty"></div>
           </div>
           <div class="field"><label>Postcode</label><input id="spPostcode"></div>
-          <div class="field"><label>Waste carriers licence number</label><input id="spLicenceNumber"></div>
           <div class="field-row">
             <div class="field"><label>Email</label><input id="spEmail" type="email"></div>
             <div class="field"><label>Phone</label><input id="spPhone"></div>
@@ -1294,7 +1293,7 @@ const SP_RECRUITMENT_STAGES = [
   },
   {
     key: 'wts_check', label: 'Checked waste transfer station licence',
-    guidance: 'Check the waste transfer station licence they\'ve provided is genuine and current using the Environment Agency\'s public register: https://environment.data.gov.uk/public-register/view/search-waste-operations\n\nOnce you\'re satisfied it checks out, tick this stage off.'
+    guidance: 'Check the waste transfer station licence they\'ve provided is genuine and current using the Environment Agency\'s public register: https://environment.data.gov.uk/public-register/view/search-all\n\nOnce you\'re satisfied it checks out, tick this stage off.'
   },
   {
     key: 'wapp_entry', label: 'Entered on Wapp',
@@ -3048,7 +3047,6 @@ async function openServiceProviderDetail(id){
   document.getElementById('spCity').value = row ? (row.city||'') : '';
   document.getElementById('spCounty').value = row ? (row.county||'') : '';
   document.getElementById('spPostcode').value = row ? (row.postcode||'') : '';
-  document.getElementById('spLicenceNumber').value = row ? (row.waste_carriers_licence_number||'') : '';
   document.getElementById('spEmail').value = row ? (row.email||'') : '';
   document.getElementById('spWebsite').value = row ? (row.website||'') : '';
   document.getElementById('spPhone').value = row ? (row.phone||'') : '';
@@ -3306,7 +3304,6 @@ async function saveServiceProvider(silent){
     city: document.getElementById('spCity').value.trim(),
     county: document.getElementById('spCounty').value.trim(),
     postcode: document.getElementById('spPostcode').value.trim(),
-    waste_carriers_licence_number: document.getElementById('spLicenceNumber').value.trim(),
     email: document.getElementById('spEmail').value.trim(),
     website: document.getElementById('spWebsite').value.trim(),
     phone: document.getElementById('spPhone').value.trim(),
@@ -3681,6 +3678,7 @@ function renderSPWasteStations(){
       html += '<p style="font-size:12px;color:var(--stamp-green);margin:8px 0 0;">✓ Licence checked against the Environment Agency register — confirmed by '+escapeHtml(confirmer ? (confirmer.name||confirmer.email) : 'a team member')+' on '+new Date(w.licence_confirmed_at).toLocaleDateString('en-GB')+'</p>';
     }else{
       html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">';
+      html += '<a href="https://environment.data.gov.uk/public-register/view/search-all" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="display:inline-block;font-size:12.5px;color:var(--brass);font-weight:600;margin-bottom:8px;">Check this site on the Environment Agency\'s public register →</a><br>';
       html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;">';
       html += '<input type="checkbox" onclick="event.stopPropagation();confirmSPWasteStationLicence(\''+w.id+'\')" style="margin-top:2px;">';
       html += '<span>I\'ve checked this site against the Environment Agency\'s public register and confirm the licence is valid and permits our service providers to tip waste here.</span>';
