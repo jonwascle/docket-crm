@@ -314,6 +314,30 @@
     <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"></div>
     <div class="field"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"></div>
     <button class="btn" onclick="doLogin()">Sign in</button>
+    <p style="text-align:center;margin-top:14px;"><span onclick="toggleForgotPasswordForm()" style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">Forgot password?</span></p>
+    <div id="forgotPasswordArea" style="display:none;margin-top:10px;">
+      <div class="field"><label>Email</label><input id="forgotPasswordEmail" type="email"></div>
+      <button class="btn ghost" onclick="requestPasswordReset()" id="forgotPasswordBtn">Send reset link</button>
+      <p id="forgotPasswordMessage" style="font-size:12.5px;color:var(--slate);margin-top:8px;display:none;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SET PASSWORD SCREEN (welcome link / reset link) ============ -->
+<div id="setPasswordScreen" style="display:none;">
+  <div class="login-card">
+    <h1>Docket</h1>
+    <p id="setPasswordIntro">Set your password to continue.</p>
+    <div class="login-error" id="setPasswordError"></div>
+    <div id="setPasswordFormArea">
+      <div class="field"><label>New password</label><input id="setPasswordInput" type="password" autocomplete="new-password"></div>
+      <div class="field"><label>Confirm new password</label><input id="setPasswordConfirmInput" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSetPassword();}"></div>
+      <button class="btn" onclick="submitSetPassword()" id="setPasswordBtn">Set password</button>
+    </div>
+    <div id="setPasswordSuccess" style="display:none;text-align:center;">
+      <p style="color:var(--stamp-green);font-weight:600;">Password set! You can now sign in.</p>
+      <button class="btn" onclick="window.location.href = window.location.pathname;">Go to sign in</button>
+    </div>
   </div>
 </div>
 
@@ -849,7 +873,10 @@
           <p class="view-title">Team</p>
           <p class="view-sub">Everyone with a login and their role.</p>
         </div>
-        <button class="btn small" id="newTeamMemberBtn" onclick="openNewTeamMemberModal()" style="display:none;">+ New team member</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn ghost small" id="notifyResetPasswordBtn" onclick="notifyAllUsersToResetPassword()" style="display:none;">Notify everyone to reset their password</button>
+          <button class="btn small" id="newTeamMemberBtn" onclick="openNewTeamMemberModal()" style="display:none;">+ New team member</button>
+        </div>
       </div>
       <div id="teamContainer"></div>
 
@@ -887,7 +914,6 @@
     <div class="login-error" id="teamModalError"></div>
     <div class="field"><label>Name</label><input id="tmName"></div>
     <div class="field"><label>Email</label><input id="tmEmail" type="email"></div>
-    <div class="field"><label>Temporary password</label><input id="tmPassword" type="text" placeholder="They can change this once signed in"></div>
     <div class="field"><label>Role</label>
       <select id="tmRole">
         <option value="user">User</option>
@@ -1346,6 +1372,103 @@ function escapeHtml(s){
 }
 
 /* ---------- Auth ---------- */
+function toggleForgotPasswordForm(){
+  const area = document.getElementById('forgotPasswordArea');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+async function requestPasswordReset(){
+  const email = document.getElementById('forgotPasswordEmail').value.trim();
+  const msgEl = document.getElementById('forgotPasswordMessage');
+  if(!email){
+    msgEl.textContent = 'Enter your email address first.';
+    msgEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('forgotPasswordBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try{
+    await fetch(SUPABASE_URL + '/functions/v1/password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'request_reset', email })
+    });
+  }catch(e){ /* fall through to the same message either way, see below */ }
+  // Always show the same message, whether or not that email matched an
+  // account — so this can't be used to check who has a Docket login.
+  msgEl.textContent = 'If that email has a Docket account, a reset link is on its way.';
+  msgEl.style.display = 'block';
+  btn.disabled = false; btn.textContent = 'Send reset link';
+}
+
+function showSetPasswordScreen(token){
+  window._setPasswordToken = token;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('setPasswordScreen').style.display = 'block';
+}
+
+async function submitSetPassword(){
+  const password = document.getElementById('setPasswordInput').value;
+  const confirm = document.getElementById('setPasswordConfirmInput').value;
+  const errEl = document.getElementById('setPasswordError');
+  errEl.style.display = 'none';
+  if(!password || password.length < 6){
+    errEl.textContent = 'Password must be at least 6 characters.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if(password !== confirm){
+    errEl.textContent = 'Passwords don\'t match.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('setPasswordBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  if(window._forcedPasswordReset){
+    try{
+      const { error: updateErr } = await sb.auth.updateUser({ password });
+      if(updateErr){
+        errEl.textContent = updateErr.message || 'Could not set your password.';
+        errEl.style.display = 'block';
+        return;
+      }
+      await sb.from('profiles').update({ must_reset_password: false }).eq('id', currentUser.id);
+      window._forcedPasswordReset = false;
+      document.getElementById('setPasswordScreen').style.display = 'none';
+      showToast('Password set — welcome back!');
+      await afterLogin(currentUser);
+    }catch(e){
+      errEl.textContent = 'Something went wrong — please check your connection and try again.';
+      errEl.style.display = 'block';
+    }finally{
+      btn.disabled = false; btn.textContent = 'Set password';
+    }
+    return;
+  }
+
+  try{
+    const res = await fetch(SUPABASE_URL + '/functions/v1/password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_password', token: window._setPasswordToken, password })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || data.error){
+      errEl.textContent = data.error || 'Could not set your password — the link may have expired. Ask an admin for a fresh one.';
+      errEl.style.display = 'block';
+      return;
+    }
+    document.getElementById('setPasswordFormArea').style.display = 'none';
+    document.getElementById('setPasswordSuccess').style.display = 'block';
+  }catch(e){
+    errEl.textContent = 'Something went wrong — please check your connection and try again.';
+    errEl.style.display = 'block';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Set password';
+  }
+}
+
 async function doLogin(){
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
@@ -1373,6 +1496,16 @@ async function afterLogin(user){
     return;
   }
   currentProfile = profile;
+
+  if(profile.must_reset_password){
+    window._forcedPasswordReset = true;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').classList.remove('active');
+    document.getElementById('setPasswordScreen').style.display = 'block';
+    document.getElementById('setPasswordIntro').textContent = 'For security, please set a new password before continuing.';
+    return;
+  }
+
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').classList.add('active');
   document.getElementById('sidebarWho').textContent = profile.name || profile.email;
@@ -1384,6 +1517,7 @@ async function afterLogin(user){
   }
   if(profile.role === 'admin'){
     document.getElementById('notificationEmailsSection').style.display = 'block';
+    document.getElementById('notifyResetPasswordBtn').style.display = 'inline-flex';
     await loadNotificationEmails();
   }
   await loadOrganisations();
@@ -1524,6 +1658,11 @@ async function checkExistingSession(){
   const onboardMatch = window.location.hash.match(/#supplier-onboard=([a-z0-9-]+)/i);
   if(onboardMatch){
     initPublicOnboardForm(onboardMatch[1]);
+    return;
+  }
+  const setPasswordMatch = window.location.hash.match(/#set-password=([a-z0-9-]+)/i);
+  if(setPasswordMatch){
+    showSetPasswordScreen(setPasswordMatch[1]);
     return;
   }
   const { data } = await sb.auth.getSession();
@@ -2477,7 +2616,6 @@ async function changeRole(profileId, newRole){
 function openNewTeamMemberModal(){
   document.getElementById('tmName').value = '';
   document.getElementById('tmEmail').value = '';
-  document.getElementById('tmPassword').value = '';
   const roleSelect = document.getElementById('tmRole');
   if(currentProfile.role === 'manager'){
     roleSelect.innerHTML = '<option value="user">User</option>';
@@ -2489,21 +2627,39 @@ function openNewTeamMemberModal(){
   document.getElementById('teamModalOverlay').classList.add('active');
 }
 
+async function notifyAllUsersToResetPassword(){
+  if(!confirm('Email everyone with a Docket login, telling them they\'ll need to set a new password next time they sign in? This also forces the reset — nobody will be able to use Docket normally until they do.')) return;
+  const btn = document.getElementById('notifyResetPasswordBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(SUPABASE_URL + '/functions/v1/password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ action: 'notify_existing_users' })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || data.error){
+      showToast('Could not send: ' + (data.error || res.statusText), true);
+      return;
+    }
+    showToast('Sent to ' + data.sent + ' of ' + data.total + ' team members.');
+  }catch(e){
+    showToast('Something went wrong sending these emails.', true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Notify everyone to reset their password';
+  }
+}
+
 async function createTeamMember(){
   const name = document.getElementById('tmName').value.trim();
   const email = document.getElementById('tmEmail').value.trim();
-  const password = document.getElementById('tmPassword').value;
   const role = document.getElementById('tmRole').value;
   const errEl = document.getElementById('teamModalError');
   errEl.style.display = 'none';
 
-  if(!email || !password){
-    errEl.textContent = 'Email and password are required.';
-    errEl.style.display = 'block';
-    return;
-  }
-  if(password.length < 6){
-    errEl.textContent = 'Password must be at least 6 characters.';
+  if(!name || !email){
+    errEl.textContent = 'Name and email are both required.';
     errEl.style.display = 'block';
     return;
   }
@@ -2520,7 +2676,7 @@ async function createTeamMember(){
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + session.access_token
       },
-      body: JSON.stringify({ action: 'create', email, password, name, role })
+      body: JSON.stringify({ action: 'create', email, name, role })
     });
     const result = await res.json();
     if(!res.ok || result.error){
@@ -2529,7 +2685,7 @@ async function createTeamMember(){
       return;
     }
     closeModal('teamModalOverlay');
-    showToast('Team member created — share the email and password with them.');
+    showToast('Team member created — they\'ll get a welcome email to set up their own password.');
     renderTeam();
   }catch(e){
     errEl.textContent = 'Could not reach the server. Has the create-user function been deployed?';
