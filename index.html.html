@@ -1123,6 +1123,7 @@
     <div class="field"><label>Assign to</label>
       <select id="taskAssignedTo"><option value="">— Unassigned —</option></select>
     </div>
+    <div class="field"><label>Due date</label><input id="taskDueDate" type="date"></div>
     <div class="field"><label>Notes</label><textarea id="taskNotes"></textarea></div>
     <div class="modal-actions">
       <button class="btn danger small" id="taskDeleteBtn" style="display:none;" onclick="deleteTask()">Delete</button>
@@ -5351,6 +5352,7 @@ function openTaskModal(id, prefill){
   document.getElementById('taskModalTitle').textContent = t ? 'Edit task' : (prefill ? prefill.modalTitle || 'New task' : 'New task');
   document.getElementById('taskTitleField').value = t ? t.title : (prefill ? prefill.title : '');
   document.getElementById('taskNotes').value = t ? (t.notes||'') : (prefill ? (prefill.notes||'') : '');
+  document.getElementById('taskDueDate').value = t ? (t.due_date||'') : (prefill ? (prefill.dueDate||'') : '');
 
   const orgId = t ? t.organisation_id : (prefill ? prefill.organisationId : null);
   document.getElementById('taskOrganisationId').value = orgId || '';
@@ -5378,7 +5380,8 @@ async function saveTask(){
     title,
     notes: document.getElementById('taskNotes').value.trim(),
     organisation_id: document.getElementById('taskOrganisationId').value || null,
-    assigned_to: newAssignee
+    assigned_to: newAssignee,
+    due_date: document.getElementById('taskDueDate').value || null
   };
   let error, taskId = id, assigneeChanged = false;
   if(id){
