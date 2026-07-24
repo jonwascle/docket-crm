@@ -1435,6 +1435,18 @@ async function submitSetPassword(){
         return;
       }
       await sb.from('profiles').update({ must_reset_password: false }).eq('id', currentUser.id);
+      const { data: { session: clearSession } } = await sb.auth.getSession();
+      const clearRes = await fetch(SUPABASE_URL + '/functions/v1/password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + clearSession.access_token },
+        body: JSON.stringify({ action: 'clear_forced_reset' })
+      });
+      const clearData = await clearRes.json().catch(()=>({}));
+      if(!clearRes.ok || clearData.error){
+        errEl.textContent = 'Your password was changed, but something went wrong finishing up — please try signing in again, and contact an admin if this keeps happening.';
+        errEl.style.display = 'block';
+        return;
+      }
       window._forcedPasswordReset = false;
       document.getElementById('setPasswordScreen').style.display = 'none';
       showToast('Password set — welcome back!');
