@@ -3172,13 +3172,13 @@ function renderServiceProvidersList(){
     container.innerHTML = '<div class="empty-state">' + (serviceProviders.length===0 ? 'No service providers yet. Add your first one.' : 'No service providers match that filter.') + '</div>';
     return;
   }
-  let html = '<table class="qtable"><thead><tr><th>Company</th><th>Phone</th><th>Waste carriers licence</th><th>Status</th></tr></thead><tbody>';
+  let html = '<table class="qtable"><thead><tr><th>Company</th><th>Phone</th><th>County</th><th>Status</th></tr></thead><tbody>';
   filtered.forEach(sp=>{
     const stage = spCurrentStatusStage(sp);
     html += '<tr onclick="openServiceProviderDetail(\''+sp.id+'\')" style="cursor:pointer;">';
     html += '<td><b>'+escapeHtml(sp.name)+'</b></td>';
     html += '<td>'+escapeHtml(sp.phone||'—')+'</td>';
-    html += '<td>'+escapeHtml(sp.waste_carriers_licence_number||'—')+'</td>';
+    html += '<td>'+escapeHtml(sp.county||'—')+'</td>';
     html += '<td>'+(sp.archived
       ? '<span class="badge" style="background:var(--paper-card-alt);color:var(--slate);">Archived</span>'
       : sp.declined
