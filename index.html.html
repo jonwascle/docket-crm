@@ -6538,7 +6538,8 @@ function renderFeatureRequestsLists(){
       if(isAdmin){
         html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
         html += '<button class="btn ghost small" onclick="copyFeatureRequestDetails(\''+r.id+'\')">Copy details</button>';
-        html += '<button class="btn small" onclick="markFeatureRequestReleased(\''+r.id+'\')">Mark released</button>';
+        html += '<button class="btn small" onclick="openMarkReleasedModal(\''+r.id+'\')">Mark released</button>';
+        html += '<button class="btn danger small" onclick="deleteFeatureRequest(\''+r.id+'\')">Delete</button>';
         html += '</div>';
       }
       html += '</div>';
@@ -6559,9 +6560,14 @@ function renderFeatureRequestsLists(){
         ? '<span class="badge" style="background:var(--stamp-green-bg);color:var(--stamp-green);">Bug fixed</span>'
         : '<span class="badge" style="background:#FDF6E7;color:#B8860B;">New feature</span>';
       let html = '<div class="onboard-section" style="margin-bottom:12px;">';
-      html += '<div style="margin-bottom:4px;">'+typeBadge+'</div>';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+      html += '<div><div style="margin-bottom:4px;">'+typeBadge+'</div>';
       html += '<b>'+escapeHtml(r.title)+'</b>';
-      html += '<p style="font-size:12.5px;color:var(--slate);margin:4px 0 8px;">Released '+new Date(r.released_at).toLocaleDateString('en-GB')+'</p>';
+      html += '<p style="font-size:12.5px;color:var(--slate);margin:4px 0 8px;">Released '+new Date(r.released_at).toLocaleDateString('en-GB')+'</p></div>';
+      if(isAdmin){
+        html += '<button class="btn danger small" onclick="deleteFeatureRequest(\''+r.id+'\')" style="flex-shrink:0;">Delete</button>';
+      }
+      html += '</div>';
       if(r.release_notes){
         html += '<p style="font-size:13px;color:var(--ink-soft);margin:0;white-space:pre-wrap;">'+escapeHtml(r.release_notes)+'</p>';
       }
@@ -6586,29 +6592,62 @@ function copyFeatureRequestDetails(id){
   showToast('Copied — ready to paste.');
 }
 
-async function markFeatureRequestReleased(id){
-  const r = featureRequests.find(x=>x.id===id);
-  if(!r) return;
-  const notes = prompt('Briefly describe what changed, for the announcement email and changelog (everyone will see this):', '');
-  if(notes === null) return;
-  const { error } = await sb.from('feature_requests').update({
-    status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id
-  }).eq('id', id);
-  if(error){ showToast('Could not save: ' + error.message, true); return; }
-  await loadFeatureRequests();
-  showToast('Marked as released — emailing everyone now.');
-  const { data: { session } } = await sb.auth.getSession();
-  const res = await fetch(SUPABASE_URL + '/functions/v1/feature-request-notify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ action: 'notify_released', requestId: id })
-  });
-  const data = await res.json().catch(()=>({}));
-  if(!res.ok || data.error){
-    showToast('Marked as released, but the announcement email failed: ' + (data.error || res.statusText), true);
-  }else{
-    showToast('Everyone has been emailed about this release.');
+function openMarkReleasedModal(id){
+  document.getElementById('mrRequestId').value = id;
+  document.getElementById('mrReleaseNotes').value = '';
+  document.getElementById('mrSkipEmail').checked = false;
+  document.getElementById('mrError').style.display = 'none';
+  document.getElementById('markReleasedModalOverlay').classList.add('active');
+}
+
+async function confirmMarkReleased(){
+  const id = document.getElementById('mrRequestId').value;
+  const notes = document.getElementById('mrReleaseNotes').value.trim();
+  const skipEmail = document.getElementById('mrSkipEmail').checked;
+  const errEl = document.getElementById('mrError');
+  errEl.style.display = 'none';
+  if(!notes){
+    errEl.textContent = 'Describe what changed first — this is what everyone will see.';
+    errEl.style.display = 'block';
+    return;
   }
+  const btn = document.getElementById('mrConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const { error } = await sb.from('feature_requests').update({
+      status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id
+    }).eq('id', id);
+    if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+    closeModal('markReleasedModalOverlay');
+    await loadFeatureRequests();
+    if(skipEmail){
+      showToast('Marked as released — no email sent.');
+      return;
+    }
+    showToast('Marked as released — emailing everyone now.');
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(SUPABASE_URL + '/functions/v1/feature-request-notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ action: 'notify_released', requestId: id })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || data.error){
+      showToast('Marked as released, but the announcement email failed: ' + (data.error || res.statusText), true);
+    }else{
+      showToast('Everyone has been emailed about this release.');
+    }
+  }finally{
+    btn.disabled = false; btn.textContent = 'Confirm';
+  }
+}
+
+async function deleteFeatureRequest(id){
+  if(!confirm('Delete this request permanently? This cannot be undone.')) return;
+  const { error } = await sb.from('feature_requests').delete().eq('id', id);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  await loadFeatureRequests();
+  showToast('Deleted.');
 }
 
 function quoteRefLabel(q){
@@ -6616,6 +6655,23 @@ function quoteRefLabel(q){
 }
 
 </script>
+<!-- ============ MARK RELEASED MODAL ============ -->
+<div class="modal-overlay" id="markReleasedModalOverlay">
+  <div class="modal">
+    <p class="modal-title">Mark as released<span style="cursor:pointer;color:var(--slate);" onclick="closeModal('markReleasedModalOverlay')">✕</span></p>
+    <input type="hidden" id="mrRequestId">
+    <div class="field"><label>What changed? (this is what everyone will see)</label><textarea id="mrReleaseNotes" placeholder="Briefly describe the fix or new feature..."></textarea></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);cursor:pointer;margin-top:4px;">
+      <input type="checkbox" id="mrSkipEmail"> Don't send the announcement email (useful while testing)
+    </label>
+    <div class="login-error" id="mrError" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn ghost small" onclick="closeModal('markReleasedModalOverlay')">Cancel</button>
+      <div class="right"><button class="btn small" id="mrConfirmBtn" onclick="confirmMarkReleased()">Confirm</button></div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ FEATURE/BUG REQUEST MODAL ============ -->
 <div class="modal-overlay" id="featureRequestModalOverlay">
   <div class="modal">
