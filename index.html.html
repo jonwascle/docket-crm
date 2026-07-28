@@ -352,6 +352,7 @@
     <div class="nav-item" data-view="assets" onclick="switchView('assets')">Assets</div>
     <div class="nav-item" data-view="serviceproviders" onclick="switchView('serviceproviders')">Service Providers</div>
     <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">Tasks <span id="tasksUrgentBadge" style="display:none;background:var(--stamp-red);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;"></span></div>
+    <div class="nav-item" data-view="feedback" onclick="switchView('feedback')">Feedback</div>
     <div class="nav-item" data-view="team" onclick="switchView('team')" id="teamNavItem" style="display:none;">Team</div>
     <div style="position:relative;">
     <div class="nav-item" onclick="toggleHelpChat()" id="askAiNavItem" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:14px;">✨ Ask AI <span style="font-size:10.5px;color:var(--slate);font-weight:400;display:block;margin-top:1px;">AI-powered help</span></div>
@@ -870,6 +871,28 @@
       <div id="tasksListContainer"></div>
     </div>
 
+    <!-- ---------- FEEDBACK VIEW (visible to everyone) ---------- -->
+    <div id="view-feedback" class="view">
+      <div class="view-header">
+        <div>
+          <p class="view-title">Feedback</p>
+          <p class="view-sub">Spotted a bug, or got an idea for something new? Let us know.</p>
+        </div>
+        <button class="btn small" onclick="openFeatureRequestModal()">+ New request</button>
+      </div>
+
+      <div class="onboard-section" style="border-top:3px solid var(--brass);">
+        <div class="onboard-section-head"><span class="onboard-section-title">In the pipeline</span></div>
+        <p style="font-size:13px;color:var(--slate);margin-top:0;">Already been asked for or reported — have a look before submitting a new one, in case it's already on the list.</p>
+        <div id="pendingFeatureRequestsList"></div>
+      </div>
+
+      <div class="onboard-section" style="border-top:3px solid var(--brass);margin-top:24px;">
+        <div class="onboard-section-head"><span class="onboard-section-title">Recently released</span></div>
+        <div id="releasedFeatureRequestsList"></div>
+      </div>
+    </div>
+
     <!-- ---------- TEAM VIEW (admin only) ---------- -->
     <div id="view-team" class="view">
       <div class="view-header">
@@ -1220,6 +1243,7 @@ let currentProfile = null;
 let contacts = [];
 let organisations = [];
 let organisationLinks = [];
+let featureRequests = [];
 let quoteDefaultPricingRows = [];
 let deals = [];
 let assets = [];
@@ -1554,6 +1578,7 @@ async function afterLogin(user){
   }
   await loadTasks();
   await loadServiceProviders();
+  await loadFeatureRequests();
   renderContacts();
 
   if(window.location.hash.match(/^#quick-task/i)){
@@ -6443,11 +6468,169 @@ async function sendHelpChatMessage(){
   }
 }
 
+async function loadFeatureRequests(){
+  const { data, error } = await sb.from('feature_requests').select('*').order('submitted_at', {ascending:false});
+  if(error){ showToast('Could not load feedback: ' + error.message, true); return; }
+  featureRequests = data || [];
+  renderFeatureRequestsLists();
+}
+
+function openFeatureRequestModal(){
+  document.getElementById('frType').value = 'bug';
+  document.getElementById('frTitle').value = '';
+  document.getElementById('frDetails').value = '';
+  document.getElementById('frError').style.display = 'none';
+  document.getElementById('featureRequestModalOverlay').classList.add('active');
+}
+
+async function submitFeatureRequest(){
+  const type = document.getElementById('frType').value;
+  const title = document.getElementById('frTitle').value.trim();
+  const details = document.getElementById('frDetails').value.trim();
+  const errEl = document.getElementById('frError');
+  errEl.style.display = 'none';
+  if(!title){
+    errEl.textContent = 'Give it a short title first.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('frSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try{
+    const { data, error } = await sb.from('feature_requests').insert({
+      type, title, details, submitted_by: currentUser.id
+    }).select().single();
+    if(error){ errEl.textContent = 'Could not submit: ' + error.message; errEl.style.display = 'block'; return; }
+    closeModal('featureRequestModalOverlay');
+    showToast('Thanks — that\'s been sent through.');
+    await loadFeatureRequests();
+    const { data: { session } } = await sb.auth.getSession();
+    fetch(SUPABASE_URL + '/functions/v1/feature-request-notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ action: 'notify_admins', requestId: data.id })
+    }).catch(()=>{});
+  }finally{
+    btn.disabled = false; btn.textContent = 'Submit';
+  }
+}
+
+function renderFeatureRequestsLists(){
+  const isAdmin = currentProfile.role === 'admin';
+  const pending = featureRequests.filter(r=>r.status==='pending');
+  const released = featureRequests.filter(r=>r.status==='released');
+
+  const pendingContainer = document.getElementById('pendingFeatureRequestsList');
+  if(pending.length===0){
+    pendingContainer.innerHTML = '<p style="color:var(--slate);font-size:13px;">Nothing in the pipeline right now.</p>';
+  }else{
+    pendingContainer.innerHTML = pending.map(r=>{
+      const submitter = teamMembers.find(m=>m.id===r.submitted_by);
+      const typeBadge = r.type==='bug'
+        ? '<span class="badge" style="background:var(--stamp-red-bg);color:var(--stamp-red);">Bug</span>'
+        : '<span class="badge" style="background:#FDF6E7;color:#B8860B;">Feature idea</span>';
+      let html = '<div class="onboard-section" style="margin-bottom:12px;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+      html += '<div><div style="margin-bottom:4px;">'+typeBadge+'</div><b>'+escapeHtml(r.title)+'</b>';
+      html += '<p style="font-size:12.5px;color:var(--slate);margin:4px 0 0;">From '+escapeHtml(submitter?(submitter.name||submitter.email):'a team member')+' · '+new Date(r.submitted_at).toLocaleDateString('en-GB')+'</p></div>';
+      if(isAdmin){
+        html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
+        html += '<button class="btn ghost small" onclick="copyFeatureRequestDetails(\''+r.id+'\')">Copy details</button>';
+        html += '<button class="btn small" onclick="markFeatureRequestReleased(\''+r.id+'\')">Mark released</button>';
+        html += '</div>';
+      }
+      html += '</div>';
+      if(r.details){
+        html += '<p style="font-size:13px;color:var(--ink-soft);margin:10px 0 0;white-space:pre-wrap;">'+escapeHtml(r.details)+'</p>';
+      }
+      html += '</div>';
+      return html;
+    }).join('');
+  }
+
+  const releasedContainer = document.getElementById('releasedFeatureRequestsList');
+  if(released.length===0){
+    releasedContainer.innerHTML = '<p style="color:var(--slate);font-size:13px;">Nothing released yet.</p>';
+  }else{
+    releasedContainer.innerHTML = released.map(r=>{
+      const typeBadge = r.type==='bug'
+        ? '<span class="badge" style="background:var(--stamp-green-bg);color:var(--stamp-green);">Bug fixed</span>'
+        : '<span class="badge" style="background:#FDF6E7;color:#B8860B;">New feature</span>';
+      let html = '<div class="onboard-section" style="margin-bottom:12px;">';
+      html += '<div style="margin-bottom:4px;">'+typeBadge+'</div>';
+      html += '<b>'+escapeHtml(r.title)+'</b>';
+      html += '<p style="font-size:12.5px;color:var(--slate);margin:4px 0 8px;">Released '+new Date(r.released_at).toLocaleDateString('en-GB')+'</p>';
+      if(r.release_notes){
+        html += '<p style="font-size:13px;color:var(--ink-soft);margin:0;white-space:pre-wrap;">'+escapeHtml(r.release_notes)+'</p>';
+      }
+      html += '</div>';
+      return html;
+    }).join('');
+  }
+}
+
+function copyFeatureRequestDetails(id){
+  const r = featureRequests.find(x=>x.id===id);
+  if(!r) return;
+  const submitter = teamMembers.find(m=>m.id===r.submitted_by);
+  const text = [
+    (r.type==='bug' ? 'BUG REPORT' : 'FEATURE REQUEST') + ': ' + r.title,
+    'Submitted by: ' + (submitter ? (submitter.name||submitter.email) : 'unknown') + ' on ' + new Date(r.submitted_at).toLocaleDateString('en-GB'),
+    '',
+    'Details:',
+    r.details || '(no further details given)'
+  ].join('\n');
+  copyTextToClipboard(text);
+  showToast('Copied — ready to paste.');
+}
+
+async function markFeatureRequestReleased(id){
+  const r = featureRequests.find(x=>x.id===id);
+  if(!r) return;
+  const notes = prompt('Briefly describe what changed, for the announcement email and changelog (everyone will see this):', '');
+  if(notes === null) return;
+  const { error } = await sb.from('feature_requests').update({
+    status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id
+  }).eq('id', id);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadFeatureRequests();
+  showToast('Marked as released — emailing everyone now.');
+  const { data: { session } } = await sb.auth.getSession();
+  const res = await fetch(SUPABASE_URL + '/functions/v1/feature-request-notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ action: 'notify_released', requestId: id })
+  });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok || data.error){
+    showToast('Marked as released, but the announcement email failed: ' + (data.error || res.statusText), true);
+  }else{
+    showToast('Everyone has been emailed about this release.');
+  }
+}
+
 function quoteRefLabel(q){
   return 'Q-' + q.id.slice(-6).toUpperCase();
 }
 
 </script>
+<!-- ============ FEATURE/BUG REQUEST MODAL ============ -->
+<div class="modal-overlay" id="featureRequestModalOverlay">
+  <div class="modal">
+    <p class="modal-title">New request<span style="cursor:pointer;color:var(--slate);" onclick="closeModal('featureRequestModalOverlay')">✕</span></p>
+    <div class="field"><label>Is this a bug or a new feature idea?</label>
+      <select id="frType"><option value="bug">Bug report — something's not working right</option><option value="feature">Feature request — something new I'd like</option></select>
+    </div>
+    <div class="field"><label>Title</label><input id="frTitle" placeholder="A short summary"></div>
+    <div class="field"><label>Details</label><textarea id="frDetails" placeholder="As much detail as you're able to give — what happened, what you'd expect instead, steps to reproduce, which page it's on, etc."></textarea></div>
+    <div class="login-error" id="frError" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn ghost small" onclick="closeModal('featureRequestModalOverlay')">Cancel</button>
+      <div class="right"><button class="btn small" id="frSubmitBtn" onclick="submitFeatureRequest()">Submit</button></div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ HELP CHAT WIDGET ============ -->
 
 <div id="helpChatPanel" style="display:none;position:fixed;bottom:24px;left:24px;width:340px;max-width:calc(100vw - 32px);height:460px;max-height:calc(100vh - 60px);background:var(--paper-card);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.18);z-index:200;flex-direction:column;overflow:hidden;border:1px solid var(--border);">
