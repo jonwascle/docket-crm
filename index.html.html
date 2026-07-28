@@ -1745,6 +1745,7 @@ function switchView(view){
   document.getElementById('view-assets').classList.toggle('active', view==='assets');
   document.getElementById('view-serviceproviders').classList.toggle('active', view==='serviceproviders');
   document.getElementById('view-tasks').classList.toggle('active', view==='tasks');
+  document.getElementById('view-feedback').classList.toggle('active', view==='feedback');
   document.getElementById('view-team').classList.toggle('active', view==='team');
   if(view==='team') renderTeam();
   if(view==='organisations') showOrganisationsList();
@@ -1753,6 +1754,7 @@ function switchView(view){
   if(view==='assets') renderAssets();
   if(view==='serviceproviders') showServiceProvidersList();
   if(view==='tasks') renderTasks();
+  if(view==='feedback') renderFeatureRequestsLists();
   if(view!=='serviceproviders') updateAppHash({ view });
 }
 
@@ -6650,5 +6652,3 @@ function quoteRefLabel(q){
 
 </body>
 </html>
-
-                                                                                                      
