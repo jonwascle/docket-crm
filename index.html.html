@@ -4162,9 +4162,9 @@ function spVisiblePricingRows(){
 
 function renderSPPricingList(){
   const container = document.getElementById('spPricingListContainer');
-  const isAdmin = currentProfile.role === 'admin';
-  document.getElementById('spPricingBulkAdjustField').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('spPricingBulkApplyBtn').style.display = isAdmin ? 'inline-flex' : 'none';
+  const canEditPricing = currentProfile.role === 'admin' || currentProfile.role === 'manager';
+  document.getElementById('spPricingBulkAdjustField').style.display = canEditPricing ? 'block' : 'none';
+  document.getElementById('spPricingBulkApplyBtn').style.display = canEditPricing ? 'inline-flex' : 'none';
   if(!currentSPId){
     container.innerHTML = '<p style="color:var(--slate);font-size:13px;">Save this service provider first, then their pricing sheet can be set up here.</p>';
     return;
@@ -4193,7 +4193,7 @@ function renderSPPricingList(){
       html += '<tr style="'+(inactive?'opacity:0.5;':'')+'">';
       html += '<td><input type="checkbox" '+(inactive?'':'checked')+' onchange="toggleSPProviderPricingActive(\''+row.id+'\', this.checked)"></td>';
       html += '<td>'+escapeHtml(row.service_name)+'</td>';
-      html += '<td>'+(isAdmin
+      html += '<td>'+(canEditPricing
         ? '<input class="price-input" type="number" step="0.01" value="'+row.rate+'" onchange="updateSPProviderPricingRate(\''+row.id+'\', this.value)">'
         : '<b>'+fmtMoney(row.rate)+'</b>')+'</td>';
       html += '</tr>';
