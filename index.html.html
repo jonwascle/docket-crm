@@ -4334,6 +4334,18 @@ function renderSPRecruitmentGuidance(){
       html += '<div class="missing-fields-banner" style="margin-top:12px;"><b>Not sent yet</b> — this needs to be sent before moving on to the next stage.</div>';
     }
   }
+  if(stage.key === 'contacted'){
+    const sp = serviceProviders.find(s=>s.id===currentSPId);
+    html += '<div style="margin-top:14px;">';
+    html += '<label style="display:block;margin-bottom:6px;font-size:12.5px;font-weight:700;color:var(--ink-soft);">Notes for whoever picks this up next</label>';
+    html += '<textarea id="spCallNotesInput" placeholder="e.g. Left a voicemail 24/07, said to try again Thursday afternoon...">'+escapeHtml(sp && sp.call_notes ? sp.call_notes : '')+'</textarea>';
+    html += '<button class="btn ghost small" onclick="saveSPCallNotes()" style="margin-top:8px;">Save note</button>';
+    if(sp && sp.call_notes_updated_at){
+      const updater = teamMembers.find(m=>m.id===sp.call_notes_updated_by);
+      html += '<p style="font-size:12px;color:var(--slate);margin:8px 0 0;">Last updated by '+escapeHtml(updater ? (updater.name||updater.email) : 'a team member')+' on '+new Date(sp.call_notes_updated_at).toLocaleDateString('en-GB')+' at '+new Date(sp.call_notes_updated_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</p>';
+    }
+    html += '</div>';
+  }
   if(stage.key === 'pricing_setup'){
     html += '<button class="btn small" onclick="switchSPSubtab(\'pricing\')" style="margin-top:14px;">Set up pricing →</button>';
     const activePricing = spVisiblePricingRows().filter(r=>r.is_active !== false);
@@ -4562,6 +4574,18 @@ function playSuccessChime(){
       osc.stop(startTime + 0.45);
     });
   }catch(e){ /* Web Audio not available — fail silently, no big deal */ }
+}
+
+async function saveSPCallNotes(){
+  if(!currentSPId) return;
+  const notes = document.getElementById('spCallNotesInput').value.trim();
+  const { error } = await sb.from('service_providers').update({
+    call_notes: notes, call_notes_updated_by: currentUser.id, call_notes_updated_at: new Date().toISOString()
+  }).eq('id', currentSPId);
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  await loadServiceProviders();
+  renderSPRecruitmentGuidance();
+  showToast('Note saved.');
 }
 
 async function completeSPRecruitmentStage(stageKey){
