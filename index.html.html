@@ -4204,7 +4204,7 @@ function renderSPPricingList(){
 }
 
 async function updateSPProviderPricingRate(id, value){
-  if(currentProfile.role !== 'admin'){ showToast('Only admins can change pricing.', true); renderSPPricingList(); return; }
+  if(currentProfile.role !== 'admin' && currentProfile.role !== 'manager'){ showToast('Only admins and managers can change pricing.', true); renderSPPricingList(); return; }
   const rate = Number(value) || 0;
   const { error } = await sb.from('service_provider_pricing').update({ rate }).eq('id', id);
   if(error){ showToast('Could not save: ' + error.message, true); return; }
@@ -4222,7 +4222,7 @@ async function toggleSPProviderPricingActive(id, checked){
 }
 
 async function applySPPricingBulkAdjust(){
-  if(currentProfile.role !== 'admin'){ showToast('Only admins can change pricing.', true); return; }
+  if(currentProfile.role !== 'admin' && currentProfile.role !== 'manager'){ showToast('Only admins and managers can change pricing.', true); return; }
   if(!currentSPId || spProviderPricing.length===0) return;
   const pct = Number(document.getElementById('spPricingBulkAdjust').value);
   if(!pct){ showToast('Enter a percentage to apply first.', true); return; }
