@@ -1683,7 +1683,7 @@ async function restoreAppViewFromHash(){
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const view = params.get('view');
   if(!view) return;
-  const validViews = ['contacts','organisations','pipeline','quotes','assets','serviceproviders','tasks','team'];
+  const validViews = ['contacts','organisations','pipeline','quotes','assets','serviceproviders','tasks','feedback','team'];
   if(!validViews.includes(view)) return;
   switchView(view);
   if(view === 'serviceproviders'){
@@ -6650,3 +6650,5 @@ function quoteRefLabel(q){
 
 </body>
 </html>
+
+                                                                                                      
