@@ -6541,6 +6541,11 @@ async function startFrRecording(){
     document.getElementById('frRecordBtn').style.display = 'none';
     document.getElementById('frStopRecordBtn').style.display = 'inline-flex';
     document.getElementById('frRecordingStatus').style.display = 'block';
+    // The modal covers most of the screen, which gets in the way of
+    // whatever they're trying to show — hide it while recording, and
+    // give them a small floating control to stop with instead.
+    document.getElementById('featureRequestModalOverlay').classList.remove('active');
+    document.getElementById('frFloatingRecordControl').style.display = 'flex';
   }catch(e){
     showToast('Could not start screen recording — permission may have been denied.', true);
   }
@@ -6557,6 +6562,8 @@ function stopFrRecording(){
   document.getElementById('frRecordBtn').style.display = 'inline-flex';
   document.getElementById('frStopRecordBtn').style.display = 'none';
   document.getElementById('frRecordingStatus').style.display = 'none';
+  document.getElementById('frFloatingRecordControl').style.display = 'none';
+  document.getElementById('featureRequestModalOverlay').classList.add('active');
 }
 
 function clearFrRecording(){
@@ -6585,18 +6592,21 @@ async function submitFeatureRequest(){
     if(error){ errEl.textContent = 'Could not submit: ' + error.message; errEl.style.display = 'block'; return; }
 
     const updates = {};
+    let mediaUploadWarning = '';
     if(frScreenshotFile){
       btn.textContent = 'Uploading screenshot…';
       const ext = frScreenshotFile.name.split('.').pop();
       const path = data.id + '/screenshot.' + ext;
       const { error: upErr } = await sb.storage.from('feature-request-media').upload(path, frScreenshotFile);
-      if(!upErr) updates.screenshot_path = path;
+      if(upErr){ mediaUploadWarning += ' Screenshot upload failed: ' + upErr.message + '.'; }
+      else{ updates.screenshot_path = path; }
     }
     if(frRecordedBlob){
       btn.textContent = 'Uploading recording…';
       const path = data.id + '/recording.webm';
       const { error: upErr } = await sb.storage.from('feature-request-media').upload(path, frRecordedBlob);
-      if(!upErr){
+      if(upErr){ mediaUploadWarning += ' Recording upload failed: ' + upErr.message + '.'; }
+      else{
         updates.video_path = path;
         updates.video_transcript_status = 'pending';
       }
@@ -6606,7 +6616,11 @@ async function submitFeatureRequest(){
     }
 
     closeModal('featureRequestModalOverlay');
-    showToast('Thanks — that\'s been sent through.');
+    if(mediaUploadWarning){
+      showToast('Request submitted, but:' + mediaUploadWarning, true);
+    }else{
+      showToast('Thanks — that\'s been sent through.');
+    }
     await loadFeatureRequests();
     const { data: { session } } = await sb.auth.getSession();
     fetch(SUPABASE_URL + '/functions/v1/feature-request-notify', {
@@ -6813,6 +6827,12 @@ function quoteRefLabel(q){
 }
 
 </script>
+<!-- ============ FLOATING RECORDING CONTROL (shown while the modal is hidden mid-recording) ============ -->
+<div id="frFloatingRecordControl" style="display:none;position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:14px 18px;border-radius:12px;z-index:300;align-items:center;gap:14px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">
+  <span style="font-size:13px;font-weight:600;">● Recording — talk us through the issue</span>
+  <button class="btn danger small" onclick="stopFrRecording()">⬛ Stop</button>
+</div>
+
 <!-- ============ MARK RELEASED MODAL ============ -->
 <div class="modal-overlay" id="markReleasedModalOverlay">
   <div class="modal">
