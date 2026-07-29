@@ -6612,7 +6612,8 @@ async function submitFeatureRequest(){
       }
     }
     if(Object.keys(updates).length > 0){
-      await sb.from('feature_requests').update(updates).eq('id', data.id);
+      const { error: attachErr } = await sb.from('feature_requests').update(updates).eq('id', data.id);
+      if(attachErr){ mediaUploadWarning += ' Could not attach the media to the request: ' + attachErr.message + '.'; }
     }
 
     closeModal('featureRequestModalOverlay');
