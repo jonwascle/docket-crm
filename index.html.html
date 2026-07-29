@@ -1244,6 +1244,10 @@ let contacts = [];
 let organisations = [];
 let organisationLinks = [];
 let featureRequests = [];
+let frScreenshotFile = null;
+let frRecordedBlob = null;
+let frMediaRecorder = null;
+let frRecordingStream = null;
 let quoteDefaultPricingRows = [];
 let deals = [];
 let assets = [];
@@ -6482,7 +6486,83 @@ function openFeatureRequestModal(){
   document.getElementById('frTitle').value = '';
   document.getElementById('frDetails').value = '';
   document.getElementById('frError').style.display = 'none';
+  clearFrScreenshot();
+  clearFrRecording();
   document.getElementById('featureRequestModalOverlay').classList.add('active');
+}
+
+function onFrScreenshotSelected(input){
+  const file = input.files[0];
+  if(!file) return;
+  frScreenshotFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('frScreenshotPreviewImg').src = e.target.result;
+    document.getElementById('frScreenshotPreview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearFrScreenshot(){
+  frScreenshotFile = null;
+  document.getElementById('frScreenshotInput').value = '';
+  document.getElementById('frScreenshotPreview').style.display = 'none';
+}
+
+async function startFrRecording(){
+  try{
+    const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    let micStream;
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }catch(micErr){
+      showToast('Screen sharing started, but microphone access was denied — recording video only, no commentary audio.', true);
+    }
+    const combinedStream = new MediaStream([
+      ...displayStream.getVideoTracks(),
+      ...(micStream ? micStream.getAudioTracks() : [])
+    ]);
+    frRecordingStream = { displayStream, micStream, combinedStream };
+
+    const chunks = [];
+    frMediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+    frMediaRecorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+    frMediaRecorder.onstop = () => {
+      frRecordedBlob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(frRecordedBlob);
+      document.getElementById('frRecordingPreviewVideo').src = url;
+      document.getElementById('frRecordingPreview').style.display = 'block';
+    };
+    // If they stop sharing via the browser's own "Stop sharing" bar
+    // instead of our button, wind the recording up gracefully too.
+    displayStream.getVideoTracks()[0].onended = () => stopFrRecording();
+
+    frMediaRecorder.start();
+    document.getElementById('frRecordBtn').style.display = 'none';
+    document.getElementById('frStopRecordBtn').style.display = 'inline-flex';
+    document.getElementById('frRecordingStatus').style.display = 'block';
+  }catch(e){
+    showToast('Could not start screen recording — permission may have been denied.', true);
+  }
+}
+
+function stopFrRecording(){
+  if(frMediaRecorder && frMediaRecorder.state !== 'inactive'){
+    frMediaRecorder.stop();
+  }
+  if(frRecordingStream){
+    frRecordingStream.displayStream.getTracks().forEach(t=>t.stop());
+    if(frRecordingStream.micStream) frRecordingStream.micStream.getTracks().forEach(t=>t.stop());
+  }
+  document.getElementById('frRecordBtn').style.display = 'inline-flex';
+  document.getElementById('frStopRecordBtn').style.display = 'none';
+  document.getElementById('frRecordingStatus').style.display = 'none';
+}
+
+function clearFrRecording(){
+  frRecordedBlob = null;
+  document.getElementById('frRecordingPreview').style.display = 'none';
+  document.getElementById('frRecordingPreviewVideo').src = '';
 }
 
 async function submitFeatureRequest(){
@@ -6503,6 +6583,28 @@ async function submitFeatureRequest(){
       type, title, details, submitted_by: currentUser.id
     }).select().single();
     if(error){ errEl.textContent = 'Could not submit: ' + error.message; errEl.style.display = 'block'; return; }
+
+    const updates = {};
+    if(frScreenshotFile){
+      btn.textContent = 'Uploading screenshot…';
+      const ext = frScreenshotFile.name.split('.').pop();
+      const path = data.id + '/screenshot.' + ext;
+      const { error: upErr } = await sb.storage.from('feature-request-media').upload(path, frScreenshotFile);
+      if(!upErr) updates.screenshot_path = path;
+    }
+    if(frRecordedBlob){
+      btn.textContent = 'Uploading recording…';
+      const path = data.id + '/recording.webm';
+      const { error: upErr } = await sb.storage.from('feature-request-media').upload(path, frRecordedBlob);
+      if(!upErr){
+        updates.video_path = path;
+        updates.video_transcript_status = 'pending';
+      }
+    }
+    if(Object.keys(updates).length > 0){
+      await sb.from('feature_requests').update(updates).eq('id', data.id);
+    }
+
     closeModal('featureRequestModalOverlay');
     showToast('Thanks — that\'s been sent through.');
     await loadFeatureRequests();
@@ -6512,6 +6614,13 @@ async function submitFeatureRequest(){
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
       body: JSON.stringify({ action: 'notify_admins', requestId: data.id })
     }).catch(()=>{});
+    if(updates.video_path){
+      fetch(SUPABASE_URL + '/functions/v1/transcribe-feature-request-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+        body: JSON.stringify({ requestId: data.id })
+      }).then(async ()=>{ await loadFeatureRequests(); }).catch(()=>{});
+    }
   }finally{
     btn.disabled = false; btn.textContent = 'Submit';
   }
@@ -6532,20 +6641,20 @@ function renderFeatureRequestsLists(){
         ? '<span class="badge" style="background:var(--stamp-red-bg);color:var(--stamp-red);">Bug</span>'
         : '<span class="badge" style="background:#FDF6E7;color:#B8860B;">Feature idea</span>';
       let html = '<div class="onboard-section" style="margin-bottom:12px;">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
-      html += '<div><div style="margin-bottom:4px;">'+typeBadge+'</div><b>'+escapeHtml(r.title)+'</b>';
+      html += '<div onclick="toggleFeatureRequestExpand(\''+r.id+'\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+      html += '<div><div style="margin-bottom:4px;">'+typeBadge+'</div><b>'+escapeHtml(r.title)+'</b> <span id="frChevron-'+r.id+'" style="color:var(--slate);font-size:11px;">▾</span>';
       html += '<p style="font-size:12.5px;color:var(--slate);margin:4px 0 0;">From '+escapeHtml(submitter?(submitter.name||submitter.email):'a team member')+' · '+new Date(r.submitted_at).toLocaleDateString('en-GB')+'</p></div>';
       if(isAdmin){
-        html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
+        html += '<div style="display:flex;gap:6px;flex-shrink:0;" onclick="event.stopPropagation();">';
         html += '<button class="btn ghost small" onclick="copyFeatureRequestDetails(\''+r.id+'\')">Copy details</button>';
         html += '<button class="btn small" onclick="openMarkReleasedModal(\''+r.id+'\')">Mark released</button>';
         html += '<button class="btn danger small" onclick="deleteFeatureRequest(\''+r.id+'\')">Delete</button>';
         html += '</div>';
       }
       html += '</div>';
-      if(r.details){
-        html += '<p style="font-size:13px;color:var(--ink-soft);margin:10px 0 0;white-space:pre-wrap;">'+escapeHtml(r.details)+'</p>';
-      }
+      html += '<div id="frDetails-'+r.id+'" style="display:none;">';
+      html += '<p style="font-size:13px;color:var(--ink-soft);margin:10px 0 0;white-space:pre-wrap;">'+(r.details ? escapeHtml(r.details) : '<i>No further details given.</i>')+'</p>';
+      html += '</div>';
       html += '</div>';
       return html;
     }).join('');
@@ -6560,17 +6669,17 @@ function renderFeatureRequestsLists(){
         ? '<span class="badge" style="background:var(--stamp-green-bg);color:var(--stamp-green);">Bug fixed</span>'
         : '<span class="badge" style="background:#FDF6E7;color:#B8860B;">New feature</span>';
       let html = '<div class="onboard-section" style="margin-bottom:12px;">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
+      html += '<div onclick="toggleFeatureRequestExpand(\''+r.id+'\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
       html += '<div><div style="margin-bottom:4px;">'+typeBadge+'</div>';
-      html += '<b>'+escapeHtml(r.title)+'</b>';
-      html += '<p style="font-size:12.5px;color:var(--slate);margin:4px 0 8px;">Released '+new Date(r.released_at).toLocaleDateString('en-GB')+'</p></div>';
+      html += '<b>'+escapeHtml(r.title)+'</b> <span id="frChevron-'+r.id+'" style="color:var(--slate);font-size:11px;">▾</span>';
+      html += '<p style="font-size:12.5px;color:var(--slate);margin:4px 0 0;">Released '+new Date(r.released_at).toLocaleDateString('en-GB')+'</p></div>';
       if(isAdmin){
-        html += '<button class="btn danger small" onclick="deleteFeatureRequest(\''+r.id+'\')" style="flex-shrink:0;">Delete</button>';
+        html += '<button class="btn danger small" onclick="event.stopPropagation();deleteFeatureRequest(\''+r.id+'\')" style="flex-shrink:0;">Delete</button>';
       }
       html += '</div>';
-      if(r.release_notes){
-        html += '<p style="font-size:13px;color:var(--ink-soft);margin:0;white-space:pre-wrap;">'+escapeHtml(r.release_notes)+'</p>';
-      }
+      html += '<div id="frDetails-'+r.id+'" style="display:none;">';
+      html += '<p style="font-size:13px;color:var(--ink-soft);margin:10px 0 0;white-space:pre-wrap;">'+(r.release_notes ? escapeHtml(r.release_notes) : '<i>No further details given.</i>')+'</p>';
+      html += '</div>';
       html += '</div>';
       return html;
     }).join('');
@@ -6590,6 +6699,44 @@ function copyFeatureRequestDetails(id){
   ].join('\n');
   copyTextToClipboard(text);
   showToast('Copied — ready to paste.');
+}
+
+async function toggleFeatureRequestExpand(id){
+  const details = document.getElementById('frDetails-'+id);
+  const chevron = document.getElementById('frChevron-'+id);
+  const isHidden = details.style.display === 'none';
+  details.style.display = isHidden ? 'block' : 'none';
+  chevron.textContent = isHidden ? '▴' : '▾';
+  if(isHidden && !details.dataset.mediaLoaded){
+    details.dataset.mediaLoaded = '1';
+    const r = featureRequests.find(x=>x.id===id);
+    if(r){
+      let mediaHtml = '';
+      if(r.screenshot_path){
+        const { data } = await sb.storage.from('feature-request-media').createSignedUrl(r.screenshot_path, 3600);
+        if(data){
+          mediaHtml += '<p style="font-size:12px;font-weight:700;color:var(--ink-soft);margin:14px 0 6px;">Screenshot</p>';
+          mediaHtml += '<a href="'+data.signedUrl+'" target="_blank" rel="noopener"><img src="'+data.signedUrl+'" style="max-width:280px;border-radius:6px;border:1px solid var(--border);"></a>';
+        }
+      }
+      if(r.video_path){
+        const { data } = await sb.storage.from('feature-request-media').createSignedUrl(r.video_path, 3600);
+        if(data){
+          mediaHtml += '<p style="font-size:12px;font-weight:700;color:var(--ink-soft);margin:14px 0 6px;">Screen recording</p>';
+          mediaHtml += '<video controls src="'+data.signedUrl+'" style="max-width:320px;border-radius:6px;"></video>';
+        }
+      }
+      if(r.video_transcript){
+        mediaHtml += '<p style="font-size:12px;font-weight:700;color:var(--ink-soft);margin:14px 0 6px;">What was said in the recording</p>';
+        mediaHtml += '<p style="font-size:13px;color:var(--ink-soft);white-space:pre-wrap;">'+escapeHtml(r.video_transcript)+'</p>';
+      }else if(r.video_path && r.video_transcript_status && r.video_transcript_status !== 'done'){
+        mediaHtml += '<p style="font-size:12px;color:var(--slate);margin-top:10px;font-style:italic;">Transcribing the recording — check back shortly.</p>';
+      }
+      if(mediaHtml){
+        details.innerHTML += mediaHtml;
+      }
+    }
+  }
 }
 
 function openMarkReleasedModal(id){
@@ -6614,8 +6761,12 @@ async function confirmMarkReleased(){
   const btn = document.getElementById('mrConfirmBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
+    const { data: reqRow } = await sb.from('feature_requests').select('video_path').eq('id', id).single();
+    if(reqRow && reqRow.video_path){
+      await sb.storage.from('feature-request-media').remove([reqRow.video_path]);
+    }
     const { error } = await sb.from('feature_requests').update({
-      status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id
+      status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id, video_path: null
     }).eq('id', id);
     if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
     closeModal('markReleasedModalOverlay');
@@ -6644,6 +6795,13 @@ async function confirmMarkReleased(){
 
 async function deleteFeatureRequest(id){
   if(!confirm('Delete this request permanently? This cannot be undone.')) return;
+  const r = featureRequests.find(x=>x.id===id);
+  const pathsToRemove = [];
+  if(r && r.screenshot_path) pathsToRemove.push(r.screenshot_path);
+  if(r && r.video_path) pathsToRemove.push(r.video_path);
+  if(pathsToRemove.length > 0){
+    await sb.storage.from('feature-request-media').remove(pathsToRemove);
+  }
   const { error } = await sb.from('feature_requests').delete().eq('id', id);
   if(error){ showToast('Could not delete: ' + error.message, true); return; }
   await loadFeatureRequests();
@@ -6681,6 +6839,25 @@ function quoteRefLabel(q){
     </div>
     <div class="field"><label>Title</label><input id="frTitle" placeholder="A short summary"></div>
     <div class="field"><label>Details</label><textarea id="frDetails" placeholder="As much detail as you're able to give — what happened, what you'd expect instead, steps to reproduce, which page it's on, etc."></textarea></div>
+    <div class="field">
+      <label>Screenshot (optional)</label>
+      <input type="file" id="frScreenshotInput" accept="image/*" onchange="onFrScreenshotSelected(this)">
+      <div id="frScreenshotPreview" style="display:none;margin-top:8px;">
+        <img id="frScreenshotPreviewImg" style="max-width:160px;max-height:120px;border-radius:6px;border:1px solid var(--border);">
+        <span onclick="clearFrScreenshot()" style="cursor:pointer;color:var(--stamp-red);font-size:12.5px;margin-left:10px;">Remove</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Screen recording (optional)</label>
+      <p style="font-size:12.5px;color:var(--slate);margin:0 0 8px;">Show us exactly what's happening — record your screen and talk us through it. Your browser will ask you to choose what to share, and for microphone permission.</p>
+      <button class="btn ghost small" id="frRecordBtn" onclick="startFrRecording()">🔴 Record my screen</button>
+      <button class="btn danger small" id="frStopRecordBtn" onclick="stopFrRecording()" style="display:none;">⬛ Stop recording</button>
+      <div id="frRecordingStatus" style="display:none;margin-top:8px;font-size:12.5px;color:var(--stamp-red);font-weight:600;">● Recording — talk us through the issue now</div>
+      <div id="frRecordingPreview" style="display:none;margin-top:8px;">
+        <video id="frRecordingPreviewVideo" controls style="max-width:280px;border-radius:6px;"></video><br>
+        <span onclick="clearFrRecording()" style="cursor:pointer;color:var(--stamp-red);font-size:12.5px;">Remove recording</span>
+      </div>
+    </div>
     <div class="login-error" id="frError" style="display:none;"></div>
     <div class="modal-actions">
       <button class="btn ghost small" onclick="closeModal('featureRequestModalOverlay')">Cancel</button>
