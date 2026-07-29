@@ -878,7 +878,10 @@
           <p class="view-title">Feedback</p>
           <p class="view-sub">Spotted a bug, or got an idea for something new? Let us know.</p>
         </div>
-        <button class="btn small" onclick="openFeatureRequestModal()">+ New request</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn ghost small" id="announceReleaseBtn" onclick="openAnnounceReleaseModal()" style="display:none;">📣 Announce a release</button>
+          <button class="btn small" onclick="openFeatureRequestModal()">+ New request</button>
+        </div>
       </div>
 
       <div class="onboard-section" style="border-top:3px solid var(--brass);">
@@ -1248,6 +1251,13 @@ let frScreenshotFile = null;
 let frRecordedBlob = null;
 let frMediaRecorder = null;
 let frRecordingStream = null;
+let frRecordingWarnTimer = null;
+let frRecordingCapTimer = null;
+let mrRecordedBlob = null;
+let mrMediaRecorder = null;
+let mrRecordingStream = null;
+let mrRecordingWarnTimer = null;
+let mrRecordingCapTimer = null;
 let quoteDefaultPricingRows = [];
 let deals = [];
 let assets = [];
@@ -6538,6 +6548,15 @@ async function startFrRecording(){
     displayStream.getVideoTracks()[0].onended = () => stopFrRecording();
 
     frMediaRecorder.start();
+    frRecordingWarnTimer = setTimeout(()=>{
+      showToast('Recording will stop automatically in 30 seconds (5 minute limit).', true);
+    }, 4.5 * 60 * 1000);
+    frRecordingCapTimer = setTimeout(()=>{
+      if(frMediaRecorder && frMediaRecorder.state !== 'inactive'){
+        showToast('Reached the 5 minute recording limit — stopped automatically.', true);
+        stopFrRecording();
+      }
+    }, 5 * 60 * 1000);
     document.getElementById('frRecordBtn').style.display = 'none';
     document.getElementById('frStopRecordBtn').style.display = 'inline-flex';
     document.getElementById('frRecordingStatus').style.display = 'block';
@@ -6552,6 +6571,8 @@ async function startFrRecording(){
 }
 
 function stopFrRecording(){
+  clearTimeout(frRecordingWarnTimer);
+  clearTimeout(frRecordingCapTimer);
   if(frMediaRecorder && frMediaRecorder.state !== 'inactive'){
     frMediaRecorder.stop();
   }
@@ -6643,6 +6664,7 @@ async function submitFeatureRequest(){
 
 function renderFeatureRequestsLists(){
   const isAdmin = currentProfile.role === 'admin';
+  document.getElementById('announceReleaseBtn').style.display = isAdmin ? 'inline-flex' : 'none';
   const pending = featureRequests.filter(r=>r.status==='pending');
   const released = featureRequests.filter(r=>r.status==='released');
 
@@ -6747,6 +6769,19 @@ async function toggleFeatureRequestExpand(id){
       }else if(r.video_path && r.video_transcript_status && r.video_transcript_status !== 'done'){
         mediaHtml += '<p style="font-size:12px;color:var(--slate);margin-top:10px;font-style:italic;">Transcribing the recording — check back shortly.</p>';
       }
+      if(r.release_video_path){
+        const { data } = await sb.storage.from('feature-request-media').createSignedUrl(r.release_video_path, 3600);
+        if(data){
+          mediaHtml += '<p style="font-size:12px;font-weight:700;color:var(--ink-soft);margin:14px 0 6px;">Release demo</p>';
+          mediaHtml += '<video controls src="'+data.signedUrl+'" style="max-width:320px;border-radius:6px;"></video>';
+        }
+      }
+      if(r.release_video_transcript){
+        mediaHtml += '<p style="font-size:12px;font-weight:700;color:var(--ink-soft);margin:14px 0 6px;">What was said in the demo</p>';
+        mediaHtml += '<p style="font-size:13px;color:var(--ink-soft);white-space:pre-wrap;">'+escapeHtml(r.release_video_transcript)+'</p>';
+      }else if(r.release_video_transcript_status && r.release_video_transcript_status !== 'done'){
+        mediaHtml += '<p style="font-size:12px;color:var(--slate);margin-top:10px;font-style:italic;">Transcribing the demo — check back shortly.</p>';
+      }
       if(mediaHtml){
         details.innerHTML += mediaHtml;
       }
@@ -6754,18 +6789,121 @@ async function toggleFeatureRequestExpand(id){
   }
 }
 
+async function startMrRecording(){
+  try{
+    const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    let micStream;
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }catch(micErr){
+      showToast('Screen sharing started, but microphone access was denied — recording video only, no commentary audio.', true);
+    }
+    const combinedStream = new MediaStream([
+      ...displayStream.getVideoTracks(),
+      ...(micStream ? micStream.getAudioTracks() : [])
+    ]);
+    mrRecordingStream = { displayStream, micStream, combinedStream };
+
+    const chunks = [];
+    mrMediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+    mrMediaRecorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+    mrMediaRecorder.onstop = () => {
+      mrRecordedBlob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(mrRecordedBlob);
+      document.getElementById('mrRecordingPreviewVideo').src = url;
+      document.getElementById('mrRecordingPreview').style.display = 'block';
+    };
+    displayStream.getVideoTracks()[0].onended = () => stopMrRecording();
+
+    mrMediaRecorder.start();
+    mrRecordingWarnTimer = setTimeout(()=>{
+      showToast('Recording will stop automatically in 30 seconds (5 minute limit).', true);
+    }, 4.5 * 60 * 1000);
+    mrRecordingCapTimer = setTimeout(()=>{
+      if(mrMediaRecorder && mrMediaRecorder.state !== 'inactive'){
+        showToast('Reached the 5 minute recording limit — stopped automatically.', true);
+        stopMrRecording();
+      }
+    }, 5 * 60 * 1000);
+    document.getElementById('mrRecordBtn').style.display = 'none';
+    document.getElementById('mrStopRecordBtn').style.display = 'inline-flex';
+    document.getElementById('markReleasedModalOverlay').classList.remove('active');
+    document.getElementById('mrFloatingRecordControl').style.display = 'flex';
+  }catch(e){
+    showToast('Could not start screen recording — permission may have been denied.', true);
+  }
+}
+
+function stopMrRecording(){
+  clearTimeout(mrRecordingWarnTimer);
+  clearTimeout(mrRecordingCapTimer);
+  if(mrMediaRecorder && mrMediaRecorder.state !== 'inactive'){
+    mrMediaRecorder.stop();
+  }
+  if(mrRecordingStream){
+    mrRecordingStream.displayStream.getTracks().forEach(t=>t.stop());
+    if(mrRecordingStream.micStream) mrRecordingStream.micStream.getTracks().forEach(t=>t.stop());
+  }
+  document.getElementById('mrRecordBtn').style.display = 'inline-flex';
+  document.getElementById('mrStopRecordBtn').style.display = 'none';
+  document.getElementById('mrFloatingRecordControl').style.display = 'none';
+  document.getElementById('markReleasedModalOverlay').classList.add('active');
+}
+
+function clearMrRecording(){
+  mrRecordedBlob = null;
+  document.getElementById('mrRecordingPreview').style.display = 'none';
+  document.getElementById('mrRecordingPreviewVideo').src = '';
+}
+
+function onMrEmailModeChange(){
+  const mode = document.getElementById('mrEmailMode').value;
+  const field = document.getElementById('mrSpecificUsersField');
+  field.style.display = mode === 'specific' ? 'block' : 'none';
+  if(mode === 'specific'){
+    const list = document.getElementById('mrSpecificUsersList');
+    list.innerHTML = teamMembers.slice().sort((a,b)=>(a.name||a.email).localeCompare(b.name||b.email)).map(m=>
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;cursor:pointer;"><input type="checkbox" class="mrSpecificUserCheckbox" value="'+m.id+'"> '+escapeHtml(m.name||m.email)+'</label>'
+    ).join('');
+  }
+}
+
 function openMarkReleasedModal(id){
+  document.getElementById('mrMode').value = 'existing';
+  document.getElementById('mrModalTitle').childNodes[0].textContent = 'Mark as released';
+  document.getElementById('mrTypeField').style.display = 'none';
+  document.getElementById('mrTitleField').style.display = 'none';
   document.getElementById('mrRequestId').value = id;
   document.getElementById('mrReleaseNotes').value = '';
-  document.getElementById('mrSkipEmail').checked = false;
+  document.getElementById('mrEmailMode').value = 'everyone';
+  onMrEmailModeChange();
   document.getElementById('mrError').style.display = 'none';
+  clearMrRecording();
+  document.getElementById('markReleasedModalOverlay').classList.add('active');
+}
+
+function openAnnounceReleaseModal(){
+  document.getElementById('mrMode').value = 'new';
+  document.getElementById('mrModalTitle').childNodes[0].textContent = 'Announce a new release';
+  document.getElementById('mrTypeField').style.display = 'block';
+  document.getElementById('mrTitleField').style.display = 'block';
+  document.getElementById('mrRequestId').value = '';
+  document.getElementById('mrType').value = 'feature';
+  document.getElementById('mrTitle').value = '';
+  document.getElementById('mrReleaseNotes').value = '';
+  document.getElementById('mrEmailMode').value = 'everyone';
+  onMrEmailModeChange();
+  document.getElementById('mrError').style.display = 'none';
+  clearMrRecording();
   document.getElementById('markReleasedModalOverlay').classList.add('active');
 }
 
 async function confirmMarkReleased(){
+  const mode = document.getElementById('mrMode').value;
   const id = document.getElementById('mrRequestId').value;
   const notes = document.getElementById('mrReleaseNotes').value.trim();
-  const skipEmail = document.getElementById('mrSkipEmail').checked;
+  const skipEmail = document.getElementById('mrEmailMode').value === 'none';
+  const emailMode = document.getElementById('mrEmailMode').value;
   const errEl = document.getElementById('mrError');
   errEl.style.display = 'none';
   if(!notes){
@@ -6773,35 +6911,89 @@ async function confirmMarkReleased(){
     errEl.style.display = 'block';
     return;
   }
+  let title, type;
+  if(mode === 'new'){
+    title = document.getElementById('mrTitle').value.trim();
+    type = document.getElementById('mrType').value;
+    if(!title){
+      errEl.textContent = 'Give it a short title first.';
+      errEl.style.display = 'block';
+      return;
+    }
+  }
   const btn = document.getElementById('mrConfirmBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
-    const { data: reqRow } = await sb.from('feature_requests').select('video_path').eq('id', id).single();
-    if(reqRow && reqRow.video_path){
-      await sb.storage.from('feature-request-media').remove([reqRow.video_path]);
+    let requestId = id;
+    if(mode === 'existing'){
+      const { data: reqRow } = await sb.from('feature_requests').select('video_path').eq('id', id).single();
+      if(reqRow && reqRow.video_path){
+        await sb.storage.from('feature-request-media').remove([reqRow.video_path]);
+      }
+      const { error } = await sb.from('feature_requests').update({
+        status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id, video_path: null
+      }).eq('id', id);
+      if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+    }else{
+      const { data: newRow, error } = await sb.from('feature_requests').insert({
+        type, title, details: null, submitted_by: currentUser.id,
+        status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id
+      }).select().single();
+      if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+      requestId = newRow.id;
     }
-    const { error } = await sb.from('feature_requests').update({
-      status: 'released', release_notes: notes, released_at: new Date().toISOString(), released_by: currentUser.id, video_path: null
-    }).eq('id', id);
-    if(error){ errEl.textContent = 'Could not save: ' + error.message; errEl.style.display = 'block'; return; }
+
+    if(mrRecordedBlob){
+      btn.textContent = 'Uploading demo…';
+      const path = requestId + '/release-demo.webm';
+      const { error: upErr } = await sb.storage.from('feature-request-media').upload(path, mrRecordedBlob);
+      if(upErr){
+        showToast('Saved, but the demo recording could not upload: ' + upErr.message, true);
+      }else{
+        await sb.from('feature_requests').update({
+          release_video_path: path, release_video_uploaded_at: new Date().toISOString(), release_video_transcript_status: 'pending'
+        }).eq('id', requestId);
+        btn.textContent = 'Transcribing demo…';
+        const { data: { session: s1 } } = await sb.auth.getSession();
+        try{
+          await fetch(SUPABASE_URL + '/functions/v1/transcribe-feature-request-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s1.access_token },
+            body: JSON.stringify({ requestId, videoField: 'release' })
+          });
+        }catch(transcribeErr){
+          // Not fatal — the announcement still goes out, just without the
+          // transcript this time.
+        }
+      }
+    }
+
     closeModal('markReleasedModalOverlay');
     await loadFeatureRequests();
     if(skipEmail){
-      showToast('Marked as released — no email sent.');
+      showToast('Released — no email sent.');
       return;
     }
-    showToast('Marked as released — emailing everyone now.');
+    let recipientIds = null;
+    if(emailMode === 'specific'){
+      recipientIds = Array.from(document.querySelectorAll('.mrSpecificUserCheckbox:checked')).map(cb=>cb.value);
+      if(recipientIds.length === 0){
+        showToast('Released — but no test recipients were selected, so no email was sent.', true);
+        return;
+      }
+    }
+    showToast(emailMode === 'specific' ? 'Released — emailing your selected test recipients now.' : 'Released — emailing everyone now.');
     const { data: { session } } = await sb.auth.getSession();
     const res = await fetch(SUPABASE_URL + '/functions/v1/feature-request-notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ action: 'notify_released', requestId: id })
+      body: JSON.stringify({ action: 'notify_released', requestId, recipientIds })
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok || data.error){
-      showToast('Marked as released, but the announcement email failed: ' + (data.error || res.statusText), true);
+      showToast('Released, but the announcement email failed: ' + (data.error || res.statusText), true);
     }else{
-      showToast('Everyone has been emailed about this release.');
+      showToast(emailMode === 'specific' ? 'Test email sent to ' + data.sent + ' recipient(s).' : 'Everyone has been emailed about this release.');
     }
   }finally{
     btn.disabled = false; btn.textContent = 'Confirm';
@@ -6837,18 +7029,47 @@ function quoteRefLabel(q){
 <!-- ============ MARK RELEASED MODAL ============ -->
 <div class="modal-overlay" id="markReleasedModalOverlay">
   <div class="modal">
-    <p class="modal-title">Mark as released<span style="cursor:pointer;color:var(--slate);" onclick="closeModal('markReleasedModalOverlay')">✕</span></p>
+    <p class="modal-title" id="mrModalTitle">Mark as released<span style="cursor:pointer;color:var(--slate);" onclick="closeModal('markReleasedModalOverlay')">✕</span></p>
     <input type="hidden" id="mrRequestId">
+    <input type="hidden" id="mrMode">
+    <div class="field" id="mrTypeField" style="display:none;"><label>Bug fix or new feature?</label>
+      <select id="mrType"><option value="feature">New feature</option><option value="bug">Bug fix</option></select>
+    </div>
+    <div class="field" id="mrTitleField" style="display:none;"><label>Title</label><input id="mrTitle" placeholder="A short summary"></div>
     <div class="field"><label>What changed? (this is what everyone will see)</label><textarea id="mrReleaseNotes" placeholder="Briefly describe the fix or new feature..."></textarea></div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);cursor:pointer;margin-top:4px;">
-      <input type="checkbox" id="mrSkipEmail"> Don't send the announcement email (useful while testing)
-    </label>
+    <div class="field">
+      <label>Demo recording (optional)</label>
+      <p style="font-size:12.5px;color:var(--slate);margin:0 0 8px;">Record your screen and talk through what's new — it'll be transcribed and included in the announcement email. Kept for 60 days, then automatically removed (the transcript stays).</p>
+      <button class="btn ghost small" id="mrRecordBtn" onclick="startMrRecording()">🔴 Record a demo</button>
+      <button class="btn danger small" id="mrStopRecordBtn" onclick="stopMrRecording()" style="display:none;">⬛ Stop recording</button>
+      <div id="mrRecordingPreview" style="display:none;margin-top:8px;">
+        <video id="mrRecordingPreviewVideo" controls style="max-width:280px;border-radius:6px;"></video><br>
+        <span onclick="clearMrRecording()" style="cursor:pointer;color:var(--stamp-red);font-size:12.5px;">Remove recording</span>
+      </div>
+    </div>
+    <div class="field"><label>Who should get the announcement email?</label>
+      <select id="mrEmailMode" onchange="onMrEmailModeChange()">
+        <option value="everyone">Everyone</option>
+        <option value="specific">Only specific people (for testing)</option>
+        <option value="none">Don't send an email</option>
+      </select>
+    </div>
+    <div class="field" id="mrSpecificUsersField" style="display:none;">
+      <label>Send to</label>
+      <div id="mrSpecificUsersList" style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px;"></div>
+    </div>
     <div class="login-error" id="mrError" style="display:none;"></div>
     <div class="modal-actions">
       <button class="btn ghost small" onclick="closeModal('markReleasedModalOverlay')">Cancel</button>
       <div class="right"><button class="btn small" id="mrConfirmBtn" onclick="confirmMarkReleased()">Confirm</button></div>
     </div>
   </div>
+</div>
+
+<!-- ============ FLOATING RECORDING CONTROL (release demo) ============ -->
+<div id="mrFloatingRecordControl" style="display:none;position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:14px 18px;border-radius:12px;z-index:300;align-items:center;gap:14px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">
+  <span style="font-size:13px;font-weight:600;">● Recording your demo — talk us through it</span>
+  <button class="btn danger small" onclick="stopMrRecording()">⬛ Stop</button>
 </div>
 
 <!-- ============ FEATURE/BUG REQUEST MODAL ============ -->
