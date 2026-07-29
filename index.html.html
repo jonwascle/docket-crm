@@ -1469,6 +1469,8 @@ async function requestPasswordReset(){
 }
 
 async function showPublicDemoScreen(requestId){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').classList.remove('active');
   document.getElementById('publicDemoScreen').style.display = 'block';
   document.getElementById('publicDemoLogo').src = 'data:image/jpeg;base64,' + LOGO_JPEG_BASE64;
   try{
