@@ -341,6 +341,30 @@
   </div>
 </div>
 
+<!-- ============ PUBLIC RELEASE DEMO VIEWER (no login needed) ============ -->
+<div id="publicDemoScreen" style="display:none;background:#F7F5F0;min-height:100vh;padding:32px 16px;">
+  <div style="max-width:640px;margin:0 auto;">
+    <div style="background: linear-gradient(135deg, var(--brass) 0%, #f0a51e 100%); padding: 26px 32px; border-radius: 12px 12px 0 0;">
+      <img id="publicDemoLogo" alt="Wascle" width="150" style="display:block;">
+    </div>
+    <div style="background:#fff;padding:32px;border-radius:0 0 12px 12px;border:1px solid var(--border);border-top:none;">
+      <div id="publicDemoLoading" style="text-align:center;color:var(--slate);padding:40px 0;">Loading…</div>
+      <div id="publicDemoContent" style="display:none;">
+        <div id="publicDemoTypeBadge" style="margin-bottom:8px;"></div>
+        <h2 id="publicDemoTitle" style="margin:0 0 6px;"></h2>
+        <p id="publicDemoDate" style="color:var(--slate);font-size:13px;margin:0 0 20px;"></p>
+        <p id="publicDemoNotes" style="white-space:pre-wrap;margin:0 0 24px;"></p>
+        <video id="publicDemoVideo" controls style="width:100%;border-radius:8px;margin-bottom:20px;display:none;"></video>
+        <div id="publicDemoTranscriptArea" style="display:none;">
+          <p style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.4px;margin:0 0 8px;">What was said in the demo</p>
+          <p id="publicDemoTranscript" style="white-space:pre-wrap;color:var(--ink-soft);font-size:14px;"></p>
+        </div>
+      </div>
+      <div id="publicDemoError" style="display:none;text-align:center;color:var(--stamp-red);padding:40px 0;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ APP SHELL ============ -->
 <div id="app">
   <div class="sidebar">
@@ -1444,6 +1468,45 @@ async function requestPasswordReset(){
   btn.disabled = false; btn.textContent = 'Send reset link';
 }
 
+async function showPublicDemoScreen(requestId){
+  document.getElementById('publicDemoScreen').style.display = 'block';
+  document.getElementById('publicDemoLogo').src = 'data:image/jpeg;base64,' + LOGO_JPEG_BASE64;
+  try{
+    const res = await fetch(SUPABASE_URL + '/functions/v1/feature-request-notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_public_release', requestId })
+    });
+    const data = await res.json().catch(()=>({}));
+    document.getElementById('publicDemoLoading').style.display = 'none';
+    if(!res.ok || data.error){
+      document.getElementById('publicDemoError').textContent = 'This link isn\'t valid, or the release it points to is no longer available.';
+      document.getElementById('publicDemoError').style.display = 'block';
+      return;
+    }
+    document.getElementById('publicDemoContent').style.display = 'block';
+    const typeLabel = data.type === 'bug' ? 'Bug fixed' : 'New feature';
+    const badgeColor = data.type === 'bug' ? 'var(--stamp-green-bg);color:var(--stamp-green)' : '#FDF6E7;color:#B8860B';
+    document.getElementById('publicDemoTypeBadge').innerHTML = '<span class="badge" style="background:'+badgeColor+';">'+typeLabel+'</span>';
+    document.getElementById('publicDemoTitle').textContent = data.title;
+    document.getElementById('publicDemoDate').textContent = 'Released ' + new Date(data.released_at).toLocaleDateString('en-GB');
+    document.getElementById('publicDemoNotes').textContent = data.release_notes || '';
+    if(data.videoUrl){
+      const video = document.getElementById('publicDemoVideo');
+      video.src = data.videoUrl;
+      video.style.display = 'block';
+    }
+    if(data.release_video_transcript){
+      document.getElementById('publicDemoTranscript').textContent = data.release_video_transcript;
+      document.getElementById('publicDemoTranscriptArea').style.display = 'block';
+    }
+  }catch(e){
+    document.getElementById('publicDemoLoading').style.display = 'none';
+    document.getElementById('publicDemoError').textContent = 'Could not load this right now — please check your connection and try again.';
+    document.getElementById('publicDemoError').style.display = 'block';
+  }
+}
+
 function showSetPasswordScreen(token){
   window._setPasswordToken = token;
   document.getElementById('loginScreen').style.display = 'none';
@@ -1720,6 +1783,11 @@ async function checkExistingSession(){
   const setPasswordMatch = window.location.hash.match(/#set-password=([a-z0-9-]+)/i);
   if(setPasswordMatch){
     showSetPasswordScreen(setPasswordMatch[1]);
+    return;
+  }
+  const watchDemoMatch = window.location.hash.match(/#watch-demo=([a-z0-9-]+)/i);
+  if(watchDemoMatch){
+    showPublicDemoScreen(watchDemoMatch[1]);
     return;
   }
   const { data } = await sb.auth.getSession();
