@@ -586,6 +586,10 @@
             <input id="qAdjustment" type="number" step="0.1" value="0" placeholder="e.g. -4 or 5" oninput="onAdjustmentChange()">
           </div>
         </div>
+        <div class="field" style="margin-bottom:16px;">
+          <label>Additional information (optional)</label>
+          <textarea id="qAdditionalInfo" placeholder="Anything else that should show on the quote — e.g. the delivery address for haulage of the smart skips"></textarea>
+        </div>
         <div class="builder-grid">
           <div class="panel-box">
             <input class="search-input" id="serviceSearch" placeholder="Search services" oninput="renderServicePicker()">
@@ -5610,7 +5614,7 @@ async function loadQuotes(){
   if(error){ showToast('Could not load quotes: ' + error.message, true); return; }
   quotes = (data||[]).map(q=>({
     id: q.id, contactId: q.contact_id, businessName: q.business_name, adjustmentPct: Number(q.adjustment_pct)||0,
-    status: q.status, createdAt: q.created_at,
+    status: q.status, createdAt: q.created_at, additionalInfo: q.additional_info || '',
     items: (q.quote_items||[]).map(it=>({name: it.name, category: it.category, basePrice: Number(it.base_price)}))
   }));
 }
@@ -5679,10 +5683,11 @@ function openQuoteBuilder(id, presetContactId){
   const existing = id ? quotes.find(x=>x.id===id) : null;
   currentQuote = existing
     ? JSON.parse(JSON.stringify(existing))
-    : {id:null, contactId: presetContactId || '', businessName:'Wascle', adjustmentPct:0, status:'draft', items:[]};
+    : {id:null, contactId: presetContactId || '', businessName:'Wascle', adjustmentPct:0, additionalInfo:'', status:'draft', items:[]};
 
   document.getElementById('builderTitle').textContent = existing ? 'Edit quote' : 'New quote';
   document.getElementById('qAdjustment').value = currentQuote.adjustmentPct || 0;
+  document.getElementById('qAdditionalInfo').value = currentQuote.additionalInfo || '';
 
   const select = document.getElementById('qContact');
   select.innerHTML = '<option value="">Select a customer</option>' +
@@ -5801,6 +5806,7 @@ function updateCartItemBasePrice(name, value){
 async function saveQuote(download){
   currentQuote.contactId = document.getElementById('qContact').value || null;
   currentQuote.adjustmentPct = Number(document.getElementById('qAdjustment').value) || 0;
+  currentQuote.additionalInfo = document.getElementById('qAdditionalInfo').value.trim();
   if(currentQuote.items.length===0){ showToast('Add at least one service before saving.', true); return; }
   const unpriced = currentQuote.items.find(it=>{
     const svc = SERVICES.find(s=>s.name===it.name);
@@ -5812,6 +5818,7 @@ async function saveQuote(download){
     contact_id: currentQuote.contactId || null,
     business_name: currentQuote.businessName || 'Wascle',
     adjustment_pct: currentQuote.adjustmentPct,
+    additional_info: currentQuote.additionalInfo || null,
     status: currentQuote.status || 'draft'
   };
 
@@ -5866,6 +5873,8 @@ async function loadQuoteDefaultPricing(){
 
 
 const LOGO_PX_W = 320;
+const WASCLE_VAT_NUMBER = '265298568';
+const WASCLE_ADDRESS_LINES = ['FibreHub', 'Trevenson Lane', 'Redruth', 'TR15 3GF'];
 
 const LOGO_PX_H = 114;
 
@@ -5933,20 +5942,43 @@ function buildQuotePdfString(q, c, options){
   text(options.headerLabel || 'PROPOSAL / QUOTE', marginX, y + 12, 8.5, '0.5 0.5 0.5', 'F1');
   y += logoH + 22;
 
+  const headerTopY = y;
+
   text(options.preparedForLabel || 'PREPARED FOR', marginX, y, 7.5, '0.55 0.55 0.55', 'F1');
-  text(options.referenceLabel || 'QUOTE REFERENCE', rightX - 120, y, 7.5, '0.55 0.55 0.55', 'F1');
   y += 13;
-
   text(c ? c.name : 'No contact linked', marginX, y, 10.5, '0.1 0.1 0.1', 'F2');
-  text(options.referenceValue || quoteRefLabel(q), rightX - 120, y, 10.5, '0.1 0.1 0.1', 'F1');
   y += 14;
-
   const org = c ? orgName(c) : '';
-  if(org){ text(org, marginX, y, 9, '0.35 0.35 0.35', 'F1'); }
-  if(!options.hideDateRow){
-    text(new Date(q.createdAt || Date.now()).toLocaleDateString('en-GB'), rightX - 120, y, 9, '0.35 0.35 0.35', 'F1');
+  if(org){ text(org, marginX, y, 9, '0.35 0.35 0.35', 'F1'); y += 13; }
+  if(c && c.email){ text(c.email, marginX, y, 9, '0.35 0.35 0.35', 'F1'); y += 13; }
+
+  // Right-hand column: quote reference, date, expiry, VAT number, and
+  // Wascle's own company address -- laid out as label/value pairs,
+  // running independently of the left column's height.
+  let ry = headerTopY;
+  const rLabelX = rightX - 150, rValueX = rightX - 150;
+  function rightPair(label, value){
+    text(label, rLabelX, ry, 7.5, '0.55 0.55 0.55', 'F1');
+    ry += 12;
+    text(value, rValueX, ry, 9.5, '0.1 0.1 0.1', 'F2');
+    ry += 15;
   }
-  y += 13;
+  rightPair(options.referenceLabel || 'QUOTE REFERENCE', options.referenceValue || quoteRefLabel(q));
+  if(!options.hideDateRow){
+    const createdDate = new Date(q.createdAt || Date.now());
+    const expiryDate = new Date(createdDate.getTime() + 30*24*60*60*1000);
+    rightPair('DATE', createdDate.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}));
+    rightPair('EXPIRY', expiryDate.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}));
+  }
+  rightPair('VAT NUMBER', WASCLE_VAT_NUMBER);
+  ry += 4;
+  text('Wascle', rValueX, ry, 9, '0.1 0.1 0.1', 'F2'); ry += 12;
+  WASCLE_ADDRESS_LINES.forEach(line=>{
+    text(line, rValueX, ry, 8.5, '0.4 0.4 0.4', 'F1');
+    ry += 11;
+  });
+
+  y = Math.max(y, ry) + 6;
   if(c && c.email){ text(c.email, marginX, y, 9, '0.35 0.35 0.35', 'F1'); y += 13; }
 
   y += 14;
@@ -5981,6 +6013,19 @@ function buildQuotePdfString(q, c, options){
     });
     y += 6;
   });
+
+  if(q.additionalInfo){
+    y += 8;
+    newPageIfNeeded(30);
+    text('ADDITIONAL INFORMATION', marginX, y, 9, '0.15 0.15 0.15', 'F2');
+    y += 15;
+    const infoLines = wrapText(q.additionalInfo, 95);
+    infoLines.forEach(ln=>{
+      newPageIfNeeded(12);
+      text(ln, marginX, y, 9.5, '0.3 0.3 0.3', 'F1');
+      y += 13;
+    });
+  }
 
   y += 2;
   newPageIfNeeded(16);
