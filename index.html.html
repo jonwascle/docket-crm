@@ -912,15 +912,17 @@
         </div>
       </div>
 
-      <div class="onboard-section" style="border-top:3px solid var(--brass);">
-        <div class="onboard-section-head"><span class="onboard-section-title">In the pipeline</span></div>
-        <p style="font-size:13px;color:var(--slate);margin-top:0;">Already been asked for or reported — have a look before submitting a new one, in case it's already on the list.</p>
-        <div id="pendingFeatureRequestsList"></div>
-      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="onboard-section" style="border-top:3px solid var(--brass);margin:0;">
+          <div class="onboard-section-head"><span class="onboard-section-title">In the pipeline</span></div>
+          <p style="font-size:13px;color:var(--slate);margin-top:0;">Already been asked for or reported — have a look before submitting a new one, in case it's already on the list.</p>
+          <div id="pendingFeatureRequestsList"></div>
+        </div>
 
-      <div class="onboard-section" style="border-top:3px solid var(--brass);margin-top:24px;">
-        <div class="onboard-section-head"><span class="onboard-section-title">Recently released</span></div>
-        <div id="releasedFeatureRequestsList"></div>
+        <div class="onboard-section" style="border-top:3px solid var(--brass);margin:0;">
+          <div class="onboard-section-head"><span class="onboard-section-title">Recently released</span></div>
+          <div id="releasedFeatureRequestsList"></div>
+        </div>
       </div>
     </div>
 
