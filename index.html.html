@@ -378,8 +378,11 @@
     <div class="nav-item" data-view="feedback" onclick="switchView('feedback')">Feedback</div>
     <div class="nav-item" data-view="team" onclick="switchView('team')" id="teamNavItem" style="display:none;">Team</div>
     <div style="position:relative;">
-    <div class="nav-item" onclick="toggleHelpChat()" id="askAiNavItem" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:14px;">✨ Ask AI <span style="font-size:10.5px;color:var(--slate);font-weight:400;display:block;margin-top:1px;">AI-powered help</span></div>
-    <div id="askAiNudge" style="display:none;position:absolute;left:100%;bottom:8px;margin-left:12px;width:200px;background:var(--ink);color:#fff;padding:12px 14px;border-radius:10px;font-size:12.5px;line-height:1.5;z-index:150;box-shadow:0 4px 14px rgba(0,0,0,0.25);">Stuck on something? I'm an AI helper — ask me anything about using Docket, any time.</div>
+    <div class="nav-item" onclick="toggleHelpChat()" id="askAiNavItem" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:14px;position:relative;">✨ Ask Ai <span style="font-size:10.5px;color:var(--slate);font-weight:400;display:block;margin-top:1px;">AI-powered help</span></div>
+    <div id="askAiNudge" style="display:none;position:absolute;left:0;right:0;bottom:100%;margin-bottom:10px;background:var(--ink);color:#fff;padding:12px 32px 12px 14px;border-radius:10px;font-size:12.5px;line-height:1.5;z-index:150;box-shadow:0 4px 14px rgba(0,0,0,0.25);">
+      <span id="askAiNudgeText"></span>
+      <span onclick="event.stopPropagation();dismissAskAiNudge();" style="position:absolute;top:8px;right:10px;cursor:pointer;color:#B8B6AE;font-size:14px;line-height:1;">✕</span>
+    </div>
     </div>
     <div class="sidebar-footer">
       <div class="who" id="sidebarWho"></div>
@@ -6604,18 +6607,34 @@ async function loadData(){
 let helpChatHistory = [];
 let helpChatOpened = false;
 let askAiNudgeTimer = null;
+let askAiNudgeHideTimer = null;
+let askAiNudgeIndex = 0;
+const ASK_AI_NUDGE_MESSAGES = [
+  "Stuck on something? I'm an AI helper — ask me anything about using Docket, any time.",
+  "Not sure how to do something in Docket? Just ask — I'm here to help.",
+  "Quick tip: try asking me things like \"how do I add a new service provider?\"",
+  "Forgotten how something works? Tap here and just ask me directly.",
+  "New to a part of Docket? I can walk you through it — just ask."
+];
 
 function startAskAiNudgeTimer(){
   if(askAiNudgeTimer) return;
   const showNudge = () => {
     const panel = document.getElementById('helpChatPanel');
     if(panel.style.display === 'flex') return; // don't nudge while it's already open
+    document.getElementById('askAiNudgeText').textContent = ASK_AI_NUDGE_MESSAGES[askAiNudgeIndex % ASK_AI_NUDGE_MESSAGES.length];
+    askAiNudgeIndex++;
     const nudge = document.getElementById('askAiNudge');
     nudge.style.display = 'block';
-    setTimeout(()=>{ nudge.style.display = 'none'; }, 7000);
+    askAiNudgeHideTimer = setTimeout(()=>{ nudge.style.display = 'none'; }, 7000);
   };
   setTimeout(showNudge, 45000); // a first gentle nudge shortly after login
   askAiNudgeTimer = setInterval(showNudge, 20 * 60 * 1000); // then every 20 minutes
+}
+
+function dismissAskAiNudge(){
+  clearTimeout(askAiNudgeHideTimer);
+  document.getElementById('askAiNudge').style.display = 'none';
 }
 
 function toggleHelpChat(){
@@ -7310,7 +7329,7 @@ function quoteRefLabel(q){
 <div id="helpChatPanel" style="display:none;position:fixed;bottom:24px;left:24px;width:340px;max-width:calc(100vw - 32px);height:460px;max-height:calc(100vh - 60px);background:var(--paper-card);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.18);z-index:200;flex-direction:column;overflow:hidden;border:1px solid var(--border);">
   <div style="background:linear-gradient(135deg, var(--brass) 0%, #f0a51e 100%);padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-start;">
     <div>
-      <div style="font-family:'Comfortaa',sans-serif;font-weight:700;color:#1B1B1B;font-size:14.5px;">✨ Ask AI</div>
+      <div style="font-family:'Comfortaa',sans-serif;font-weight:700;color:#1B1B1B;font-size:14.5px;">✨ Ask Ai</div>
       <div style="font-size:11px;color:#3a2f0f;margin-top:2px;">AI-powered help — ask how to do anything in Docket</div>
     </div>
     <span onclick="toggleHelpChat()" style="cursor:pointer;color:#1B1B1B;font-size:18px;line-height:1;">✕</span>
