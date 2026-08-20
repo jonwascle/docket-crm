@@ -2806,19 +2806,60 @@ async function renderUsageDashboard(profiles){
   const listEl = document.getElementById('usageListContainer');
 
   const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString();
-  const { data: events, error } = await sb.from('login_events').select('user_id, logged_in_at').gte('logged_in_at', thirtyDaysAgo);
-  if(error){ listEl.innerHTML = '<div class="empty-state">Could not load usage: '+escapeHtml(error.message)+'</div>'; return; }
+  const [{ data: events, error: eventsErr }, { data: pings, error: pingsErr }] = await Promise.all([
+    sb.from('login_events').select('user_id, logged_in_at').gte('logged_in_at', thirtyDaysAgo),
+    sb.from('activity_pings').select('user_id, pinged_at').gte('pinged_at', thirtyDaysAgo),
+  ]);
+  if(eventsErr || pingsErr){ listEl.innerHTML = '<div class="empty-state">Could not load usage: '+escapeHtml((eventsErr||pingsErr).message)+'</div>'; return; }
 
   const sevenDaysAgoTime = Date.now() - 7*24*60*60*1000;
   const fiveMinutesAgoTime = Date.now() - 5*60*1000;
 
+  // Groups a sorted list of timestamps into sessions (a gap of more than
+  // 10 minutes between activity means they'd closed the app and come
+  // back later, rather than one continuous sitting), then sums how long
+  // each session lasted. A session with only a single timestamp in it
+  // contributes nothing, since there's no way to know how long they
+  // were actually there for just one data point.
+  function estimateTimeSpentMs(timestamps){
+    if(timestamps.length < 2) return 0;
+    const sorted = timestamps.slice().sort((a,b)=>a-b);
+    let total = 0, sessionStart = sorted[0], prev = sorted[0];
+    for(let i=1;i<sorted.length;i++){
+      const gapMs = sorted[i] - prev;
+      if(gapMs > 10*60*1000){
+        total += prev - sessionStart;
+        sessionStart = sorted[i];
+      }
+      prev = sorted[i];
+    }
+    total += prev - sessionStart;
+    return total;
+  }
+
+  function fmtDuration(ms){
+    const totalMinutes = Math.round(ms / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if(hours === 0 && minutes === 0) return '—';
+    if(hours === 0) return minutes + 'm';
+    return hours + 'h ' + minutes + 'm';
+  }
+
   const rows = profiles.map(p=>{
     const userEvents = (events||[]).filter(e=>e.user_id===p.id);
+    const userPings = (pings||[]).filter(e=>e.user_id===p.id);
     const loginCount30 = userEvents.length;
     const loginCount7 = userEvents.filter(e=>new Date(e.logged_in_at).getTime() >= sevenDaysAgoTime).length;
     const lastLogin = userEvents.length ? userEvents.reduce((a,b)=> new Date(a.logged_in_at) > new Date(b.logged_in_at) ? a : b).logged_in_at : null;
     const activeNow = p.last_seen_at && new Date(p.last_seen_at).getTime() >= fiveMinutesAgoTime;
-    return { profile: p, lastLogin, loginCount7, loginCount30, activeNow };
+
+    const allTimestamps30 = [...userEvents.map(e=>new Date(e.logged_in_at).getTime()), ...userPings.map(e=>new Date(e.pinged_at).getTime())];
+    const allTimestamps7 = allTimestamps30.filter(t=>t >= sevenDaysAgoTime);
+    const timeSpent30 = estimateTimeSpentMs(allTimestamps30);
+    const timeSpent7 = estimateTimeSpentMs(allTimestamps7);
+
+    return { profile: p, lastLogin, loginCount7, loginCount30, activeNow, timeSpent7, timeSpent30 };
   }).sort((a,b)=>{
     if(!a.lastLogin && !b.lastLogin) return 0;
     if(!a.lastLogin) return 1;
@@ -2833,17 +2874,20 @@ async function renderUsageDashboard(profiles){
     '<div class="panel" style="flex:1;min-width:140px;padding:14px 16px;"><div style="font-size:22px;font-weight:700;color:var(--ink);">'+rows.length+'</div><div style="font-size:12px;color:var(--slate);">Total team members</div></div>' +
     '<div class="panel" style="flex:1;min-width:140px;padding:14px 16px;"><div style="font-size:22px;font-weight:700;color:var(--ink);">'+neverLoggedIn+'</div><div style="font-size:12px;color:var(--slate);">Never logged in</div></div>';
 
-  let html = '<table class="qtable"><thead><tr><th>Name</th><th>Last login</th><th>Logins (7 days)</th><th>Logins (30 days)</th><th>Status</th></tr></thead><tbody>';
+  let html = '<table class="qtable"><thead><tr><th>Name</th><th>Last login</th><th>Logins (7d)</th><th>Time in app (7d)</th><th>Logins (30d)</th><th>Time in app (30d)</th><th>Status</th></tr></thead><tbody>';
   rows.forEach(r=>{
     html += '<tr>';
     html += '<td><b>'+escapeHtml(r.profile.name||r.profile.email)+'</b></td>';
     html += '<td>'+(r.lastLogin ? new Date(r.lastLogin).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '<span style="color:var(--slate);">Never</span>')+'</td>';
     html += '<td>'+r.loginCount7+'</td>';
+    html += '<td>'+fmtDuration(r.timeSpent7)+'</td>';
     html += '<td>'+r.loginCount30+'</td>';
+    html += '<td>'+fmtDuration(r.timeSpent30)+'</td>';
     html += '<td>'+(r.activeNow ? '<span class="badge" style="background:var(--stamp-green-bg);color:var(--stamp-green);">Active now</span>' : '—')+'</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
+  html += '<p style="font-size:11.5px;color:var(--slate);margin-top:10px;">"Time in app" is an estimate based on activity roughly every 2 minutes while Docket stays open — a gap of more than 10 minutes is treated as ending that sitting.</p>';
   listEl.innerHTML = html;
 }
 
@@ -6675,10 +6719,14 @@ let helpChatOpened = false;
 let activityPingTimer = null;
 function startActivityPing(){
   if(activityPingTimer) return;
-  activityPingTimer = setInterval(()=>{
+  const ping = () => {
     if(!currentUser) return;
-    sb.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', currentUser.id).then(()=>{});
-  }, 2 * 60 * 1000); // every 2 minutes while the app stays open
+    const now = new Date().toISOString();
+    sb.from('profiles').update({ last_seen_at: now }).eq('id', currentUser.id).then(()=>{});
+    sb.from('activity_pings').insert({ user_id: currentUser.id, pinged_at: now }).then(()=>{});
+  };
+  ping(); // log one immediately, not just after the first interval
+  activityPingTimer = setInterval(ping, 2 * 60 * 1000); // every 2 minutes while the app stays open
 }
 
 let askAiNudgeTimer = null;
