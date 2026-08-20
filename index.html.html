@@ -947,6 +947,15 @@
       </div>
       <div id="teamContainer"></div>
 
+      <div id="usageSection" style="display:none;margin-top:36px;">
+        <div class="onboard-section">
+          <div class="onboard-section-head"><span class="onboard-section-title">Usage</span></div>
+          <p style="font-size:13px;color:var(--slate);margin-top:0;">Sorted by most recent login — anyone who hasn't been using Docket naturally sinks to the bottom.</p>
+          <div id="usageSummaryRow" style="display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap;"></div>
+          <div id="usageListContainer"></div>
+        </div>
+      </div>
+
       <div id="notificationEmailsSection" style="display:none;margin-top:36px;">
         <div class="onboard-section">
           <div class="onboard-section-head"><span class="onboard-section-title">Notification emails</span></div>
@@ -1646,6 +1655,12 @@ async function afterLogin(user){
     return;
   }
   currentProfile = profile;
+
+  // Best-effort usage tracking for the admin dashboard -- never blocks
+  // sign-in if it fails for any reason.
+  sb.from('login_events').insert({ user_id: user.id }).then(()=>{});
+  sb.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', user.id).then(()=>{});
+  startActivityPing();
 
   if(profile.must_reset_password){
     window._forcedPasswordReset = true;
@@ -2779,6 +2794,57 @@ async function renderTeam(){
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+
+  if(currentProfile.role === 'admin'){
+    document.getElementById('usageSection').style.display = 'block';
+    await renderUsageDashboard(data);
+  }
+}
+
+async function renderUsageDashboard(profiles){
+  const summaryEl = document.getElementById('usageSummaryRow');
+  const listEl = document.getElementById('usageListContainer');
+
+  const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+  const { data: events, error } = await sb.from('login_events').select('user_id, logged_in_at').gte('logged_in_at', thirtyDaysAgo);
+  if(error){ listEl.innerHTML = '<div class="empty-state">Could not load usage: '+escapeHtml(error.message)+'</div>'; return; }
+
+  const sevenDaysAgoTime = Date.now() - 7*24*60*60*1000;
+  const fiveMinutesAgoTime = Date.now() - 5*60*1000;
+
+  const rows = profiles.map(p=>{
+    const userEvents = (events||[]).filter(e=>e.user_id===p.id);
+    const loginCount30 = userEvents.length;
+    const loginCount7 = userEvents.filter(e=>new Date(e.logged_in_at).getTime() >= sevenDaysAgoTime).length;
+    const lastLogin = userEvents.length ? userEvents.reduce((a,b)=> new Date(a.logged_in_at) > new Date(b.logged_in_at) ? a : b).logged_in_at : null;
+    const activeNow = p.last_seen_at && new Date(p.last_seen_at).getTime() >= fiveMinutesAgoTime;
+    return { profile: p, lastLogin, loginCount7, loginCount30, activeNow };
+  }).sort((a,b)=>{
+    if(!a.lastLogin && !b.lastLogin) return 0;
+    if(!a.lastLogin) return 1;
+    if(!b.lastLogin) return -1;
+    return new Date(b.lastLogin) - new Date(a.lastLogin);
+  });
+
+  const activeNowCount = rows.filter(r=>r.activeNow).length;
+  const neverLoggedIn = rows.filter(r=>!r.lastLogin).length;
+  summaryEl.innerHTML =
+    '<div class="panel" style="flex:1;min-width:140px;padding:14px 16px;"><div style="font-size:22px;font-weight:700;color:var(--ink);">'+activeNowCount+'</div><div style="font-size:12px;color:var(--slate);">Active right now</div></div>' +
+    '<div class="panel" style="flex:1;min-width:140px;padding:14px 16px;"><div style="font-size:22px;font-weight:700;color:var(--ink);">'+rows.length+'</div><div style="font-size:12px;color:var(--slate);">Total team members</div></div>' +
+    '<div class="panel" style="flex:1;min-width:140px;padding:14px 16px;"><div style="font-size:22px;font-weight:700;color:var(--ink);">'+neverLoggedIn+'</div><div style="font-size:12px;color:var(--slate);">Never logged in</div></div>';
+
+  let html = '<table class="qtable"><thead><tr><th>Name</th><th>Last login</th><th>Logins (7 days)</th><th>Logins (30 days)</th><th>Status</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    html += '<tr>';
+    html += '<td><b>'+escapeHtml(r.profile.name||r.profile.email)+'</b></td>';
+    html += '<td>'+(r.lastLogin ? new Date(r.lastLogin).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '<span style="color:var(--slate);">Never</span>')+'</td>';
+    html += '<td>'+r.loginCount7+'</td>';
+    html += '<td>'+r.loginCount30+'</td>';
+    html += '<td>'+(r.activeNow ? '<span class="badge" style="background:var(--stamp-green-bg);color:var(--stamp-green);">Active now</span>' : '—')+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  listEl.innerHTML = html;
 }
 
 async function changeRole(profileId, newRole){
@@ -6606,6 +6672,15 @@ async function loadData(){
 
 let helpChatHistory = [];
 let helpChatOpened = false;
+let activityPingTimer = null;
+function startActivityPing(){
+  if(activityPingTimer) return;
+  activityPingTimer = setInterval(()=>{
+    if(!currentUser) return;
+    sb.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', currentUser.id).then(()=>{});
+  }, 2 * 60 * 1000); // every 2 minutes while the app stays open
+}
+
 let askAiNudgeTimer = null;
 let askAiNudgeHideTimer = null;
 let askAiNudgeIndex = 0;
