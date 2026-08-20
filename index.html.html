@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1441,6 +1440,22 @@ function showToast(msg, isError){
   setTimeout(()=>{ t.style.display = 'none'; }, 3500);
 }
 
+// Best-effort sync/tracking to Klaviyo -- never blocks the actual
+// Docket action if it fails, and won't do anything at all until an
+// email is actually available for the given contact.
+async function klaviyoCall(payload){
+  if(!payload.email) return; // Klaviyo profiles are identified by email -- nothing to do without one
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session) return;
+    fetch(SUPABASE_URL + '/functions/v1/klaviyo-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify(payload)
+    }).catch(()=>{});
+  }catch(e){ /* Klaviyo sync is best-effort -- never interrupts the real action */ }
+}
+
 function escapeHtml(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -1942,12 +1957,17 @@ async function saveContact(){
     notes: document.getElementById('cNotes').value.trim()
   };
   let error;
+  const isNewContact = !id;
   if(id){
     ({ error } = await sb.from('contacts').update(payload).eq('id', id));
   }else{
     ({ error } = await sb.from('contacts').insert(payload));
   }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
+  if(isNewContact && payload.email){
+    const org = organisations.find(o=>o.id===organisationId);
+    klaviyoCall({ action: 'sync_contact', email: payload.email, name: payload.name, phone: payload.phone, organisation: org ? org.name : null });
+  }
   closeModal('contactModalOverlay');
   await loadContacts();
   renderContacts();
@@ -2109,6 +2129,13 @@ async function onKanbanDrop(event, newStage){
   if(!deal || deal.stage === newStage) return;
   const { error } = await sb.from('deals').update({ stage: newStage }).eq('id', dealId);
   if(error){ showToast('Could not move deal: ' + error.message, true); return; }
+  if(newStage === 'won' && deal.contact_id){
+    const c = contacts.find(x=>x.id===deal.contact_id);
+    if(c && c.email){
+      klaviyoCall({ action: 'track_event', email: c.email, name: c.name, phone: c.phone, organisation: orgName(c),
+        eventName: 'Deal Won', eventProperties: { deal_title: deal.title, value: deal.value || null } });
+    }
+  }
   await loadDeals();
   renderPipeline();
 }
@@ -2642,6 +2669,10 @@ async function toggleOnboardingLive(){
     banner.style.display = 'none';
     document.getElementById('orgDetailLiveBadge').style.display = 'inline-block';
     showToast('Marked as a live customer.');
+    if(row.contact_email){
+      klaviyoCall({ action: 'track_event', email: row.contact_email, name: [row.contact_first_name, row.contact_last_name].filter(Boolean).join(' '),
+        phone: row.contact_phone, organisation: row.name, eventName: 'Customer Went Live', eventProperties: { organisation: row.name } });
+    }
     if(willNotify){
       generateAndSendOnboardingPdf({ ...row, id: newId });
     }
@@ -5667,6 +5698,13 @@ function printQuote(id){
 async function markQuoteSent(id){
   const { error } = await sb.from('quotes').update({ status: 'sent' }).eq('id', id);
   if(error){ showToast('Could not update: ' + error.message, true); return; }
+  const q = quotes.find(x=>x.id===id);
+  const c = q ? contacts.find(x=>x.id===q.contactId) : null;
+  if(c && c.email){
+    const total = q.items.reduce((sum, it)=> sum + round2(it.basePrice * (1 + (Number(q.adjustmentPct)||0)/100)), 0);
+    klaviyoCall({ action: 'track_event', email: c.email, name: c.name, phone: c.phone, organisation: orgName(c),
+      eventName: 'Quote Sent', eventProperties: { quote_reference: quoteRefLabel(q), total: total, service_count: q.items.length } });
+  }
   await loadQuotes();
   renderQuotesList();
   showToast('Quote marked as sent.');
