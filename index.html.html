@@ -580,7 +580,12 @@
           <button class="btn ghost small" onclick="showQuoteList()">← Back to quotes</button>
         </div>
         <div class="field-row" style="margin-bottom:16px;">
-          <div class="field"><label>Customer</label><select id="qContact"></select></div>
+          <div class="field" style="position:relative;">
+            <label>Customer</label>
+            <input id="qContactSearch" autocomplete="off" placeholder="Search for a customer" oninput="onQuoteContactSearchInput()" onfocus="onQuoteContactSearchInput()">
+            <input type="hidden" id="qContact">
+            <div id="qContactSuggestions" class="org-suggestions" style="display:none;"></div>
+          </div>
           <div class="field" style="max-width:200px;"><label>Whole-quote adjustment (%)</label>
             <input id="qAdjustment" type="number" step="0.1" value="0" placeholder="e.g. -4 or 5" oninput="onAdjustmentChange()">
           </div>
@@ -5729,11 +5734,10 @@ function openQuoteBuilder(id, presetContactId){
   document.getElementById('qAdjustment').value = currentQuote.adjustmentPct || 0;
   document.getElementById('qAdditionalInfo').value = currentQuote.additionalInfo || '';
 
-  const select = document.getElementById('qContact');
-  select.innerHTML = '<option value="">Select a customer</option>' +
-    contacts.slice().sort((a,b)=>a.name.localeCompare(b.name))
-      .map(c=>'<option value="'+c.id+'">'+escapeHtml(c.name)+(orgName(c) ? ' — '+escapeHtml(orgName(c)) : '')+'</option>').join('');
-  select.value = currentQuote.contactId || '';
+  document.getElementById('qContact').value = currentQuote.contactId || '';
+  const preselected = currentQuote.contactId ? contacts.find(c=>c.id===currentQuote.contactId) : null;
+  document.getElementById('qContactSearch').value = preselected ? (preselected.name + (orgName(preselected) ? ' — ' + orgName(preselected) : '')) : '';
+  document.getElementById('qContactSuggestions').style.display = 'none';
 
   document.getElementById('serviceSearch').value = '';
   renderServicePicker();
@@ -5743,6 +5747,44 @@ function openQuoteBuilder(id, presetContactId){
   document.getElementById('quoteDefaultPricingMode').style.display = 'none';
   document.getElementById('quoteBuilderMode').style.display = 'block';
 }
+
+function onQuoteContactSearchInput(){
+  const raw = document.getElementById('qContactSearch').value;
+  const q = raw.trim().toLowerCase();
+  document.getElementById('qContact').value = '';
+  const list = document.getElementById('qContactSuggestions');
+
+  const matches = q
+    ? contacts.filter(c=>c.name.toLowerCase().includes(q) || orgName(c).toLowerCase().includes(q))
+    : contacts.slice();
+  matches.sort((a,b)=>a.name.localeCompare(b.name));
+
+  let html = '';
+  matches.slice(0, 8).forEach(c=>{
+    html += '<div class="org-suggestion-item" onmousedown="selectQuoteContact(\''+c.id+'\')">'+escapeHtml(c.name)+(orgName(c) ? ' — '+escapeHtml(orgName(c)) : '')+'</div>';
+  });
+  if(!html){
+    html = '<div class="org-suggestion-item" style="color:var(--slate);cursor:default;">No matching customers</div>';
+  }
+  list.innerHTML = html;
+  list.style.display = 'block';
+}
+
+function selectQuoteContact(id){
+  const c = contacts.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('qContact').value = c.id;
+  document.getElementById('qContactSearch').value = c.name + (orgName(c) ? ' — ' + orgName(c) : '');
+  document.getElementById('qContactSuggestions').style.display = 'none';
+}
+
+document.addEventListener('click', function(e){
+  const box = document.getElementById('qContactSuggestions');
+  const input = document.getElementById('qContactSearch');
+  if(box && input && e.target !== box && e.target !== input && !box.contains(e.target)){
+    box.style.display = 'none';
+  }
+});
 
 function renderServicePicker(){
   const q = (document.getElementById('serviceSearch').value || '').toLowerCase();
