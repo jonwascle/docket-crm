@@ -6717,10 +6717,21 @@ async function loadData(){
 let helpChatHistory = [];
 let helpChatOpened = false;
 let activityPingTimer = null;
+let lastGenuineActivityTime = Date.now();
+['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'].forEach(evt=>{
+  document.addEventListener(evt, ()=>{ lastGenuineActivityTime = Date.now(); }, { passive: true });
+});
+
 function startActivityPing(){
   if(activityPingTimer) return;
   const ping = () => {
     if(!currentUser) return;
+    // If there's been no real interaction (mouse, keyboard, scroll,
+    // touch) since before this ping interval even started, they're
+    // idle -- skip logging this ping entirely rather than counting an
+    // untouched, open tab as "in use".
+    const idleForMs = Date.now() - lastGenuineActivityTime;
+    if(idleForMs > 2 * 60 * 1000) return;
     const now = new Date().toISOString();
     sb.from('profiles').update({ last_seen_at: now }).eq('id', currentUser.id).then(()=>{});
     sb.from('activity_pings').insert({ user_id: currentUser.id, pinged_at: now }).then(()=>{});
