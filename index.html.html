@@ -1176,6 +1176,11 @@
       </div>
     </div>
 
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="aRetired" style="width:auto;">
+      <label for="aRetired" style="margin:0;">Out of production / retired — frees up this asset number for reuse on a new skip</label>
+    </div>
+
     <div class="field"><label>Notes</label><textarea id="aNotes"></textarea></div>
 
     <div class="modal-actions">
@@ -3100,7 +3105,7 @@ function assetRowToCamel(row){
     padlockNumber: row.padlock_number, sensorSerial: row.sensor_serial, fillSensor: row.fill_sensor, qr: row.qr, signage: row.signage,
     subbie: row.subbie, groupedInvoicing: row.grouped_invoicing, weeklyRental: row.weekly_rental,
     masterPin: row.master_pin, branch: row.branch, branchContact: row.branch_contact, notes: row.notes,
-    latitude: row.latitude, longitude: row.longitude
+    latitude: row.latitude, longitude: row.longitude, retired: row.retired||false
   };
 }
 function camelToAssetRow(a){
@@ -3111,7 +3116,8 @@ function camelToAssetRow(a){
     container_type: a.containerType||null, container_volume: a.containerVolume||null, waste_stream: a.wasteStream||null, paint_drum: a.paintDrum||null,
     padlock_number: a.padlockNumber||null, sensor_serial: a.sensorSerial||null, fill_sensor: a.fillSensor||null, qr: a.qr||null, signage: a.signage||null,
     subbie: a.subbie||null, grouped_invoicing: a.groupedInvoicing||null, weekly_rental: a.weeklyRental||null,
-    master_pin: a.masterPin||null, branch: a.branch||null, branch_contact: a.branchContact||null, notes: a.notes||null
+    master_pin: a.masterPin||null, branch: a.branch||null, branch_contact: a.branchContact||null, notes: a.notes||null,
+    retired: a.retired||false
   };
 }
 
@@ -3162,7 +3168,7 @@ function renderAssets(){
   html += '</tr></thead><tbody>';
   filtered.forEach(a=>{
     html += '<tr onclick="openAssetModal(\''+a.id+'\')" style="cursor:pointer;">';
-    html += '<td><b>'+escapeHtml(a.assetNumber||'—')+'</b></td>';
+    html += '<td><b>'+escapeHtml(a.assetNumber||'—')+'</b>'+(a.retired ? ' <span class="badge" style="background:#F0EBDD;color:#8A8884;">Retired</span>' : '')+'</td>';
     if(isScp){
       html += '<td>'+escapeHtml(a.housingAssociation||'—')+'</td><td>'+escapeHtml(a.address||'—')+'</td><td>'+escapeHtml(a.branch||'—')+'</td><td>'+escapeHtml(a.branchContact||'—')+'</td>';
     }else{
@@ -3354,6 +3360,22 @@ function enforceAssetNumberPrefix(){
   el.setSelectionRange(el.value.length, el.value.length);
 }
 
+function nextAvailableAssetNumber(assetType){
+  const prefix = ASSET_TYPE_PREFIX[assetType] || '';
+  const activeNumbers = new Set(
+    assets
+      .filter(a=>(a.assetType||'skip')===assetType && !a.retired)
+      .map(a=>{
+        const m = (a.assetNumber||'').match(/^\D*(\d+)/);
+        return m ? Number(m[1]) : null;
+      })
+      .filter(n=>n !== null)
+  );
+  let n = 1;
+  while(activeNumbers.has(n)) n++;
+  return prefix + n;
+}
+
 function openAssetModal(id){
   document.getElementById('assetId').value = id || '';
   const a = id ? assets.find(x=>x.id===id) : null;
@@ -3364,7 +3386,8 @@ function openAssetModal(id){
     document.getElementById(ASSET_FIELD_IDS[key]).value = a ? (a[key]||'') : '';
   });
   document.getElementById('aAssetType').value = type;
-  if(!a){ document.getElementById('aAssetNumber').value = ASSET_TYPE_PREFIX[type] || ''; }
+  if(!a){ document.getElementById('aAssetNumber').value = nextAvailableAssetNumber(type); }
+  document.getElementById('aRetired').checked = a ? !!a.retired : false;
   onAssetTypeChange();
   document.getElementById('assetDeleteBtn').style.display = a ? 'inline-flex' : 'none';
   document.getElementById('assetModalOverlay').classList.add('active');
@@ -3378,10 +3401,10 @@ async function saveAsset(){
   if(!assetNumber || (prefix && assetNumber.toUpperCase() === prefix)){ showToast('Asset number is required.', true); return; }
   const isExempt = assetNumber.toLowerCase() === 'lockers only';
   if(!isExempt){
-    const duplicate = assets.some(x=>x.id!==id && (x.assetNumber||'').trim().toUpperCase() === assetNumber.toUpperCase());
+    const duplicate = assets.some(x=>x.id!==id && !x.retired && (x.assetNumber||'').trim().toUpperCase() === assetNumber.toUpperCase());
     if(duplicate){ showToast('An asset with number "'+assetNumber+'" already exists.', true); return; }
   }
-  const data = { assetType };
+  const data = { assetType, retired: document.getElementById('aRetired').checked };
   Object.keys(ASSET_FIELD_IDS).forEach(key=>{
     if(key==='assetType') return;
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
