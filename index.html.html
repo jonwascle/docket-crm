@@ -3356,11 +3356,39 @@ async function saveAsset(){
     if(key==='assetType') return;
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
   });
+
+  if(assetType === 'skip'){
+    const missing = [];
+    if(!data.customerName) missing.push('Customer name');
+    if(!data.housingAssociation) missing.push('Housing association');
+    if(!data.address) missing.push('Address');
+    if(missing.length){
+      showToast('Smart skips need these filled in for Lockit to pick them up: ' + missing.join(', ') + '.', true);
+      return;
+    }
+  }
+
   const row = camelToAssetRow(data);
-  let error;
+  let error, savedId = id;
   if(id){ ({ error } = await sb.from('assets').update(row).eq('id', id)); }
-  else{ ({ error } = await sb.from('assets').insert(row)); }
+  else{
+    const { data: inserted, error: insertErr } = await sb.from('assets').insert(row).select('id').single();
+    error = insertErr;
+    if(inserted) savedId = inserted.id;
+  }
   if(error){ showToast('Could not save: ' + error.message, true); return; }
+
+  // Geocode immediately if this asset has no coordinates yet, rather
+  // than waiting for someone to happen to open the Asset Map later --
+  // that gap is exactly what let assets silently sit without a usable
+  // location (which Lockit needs for its proximity check).
+  if(!row.latitude || !row.longitude){
+    const postcodeToUse = geocodableValue({ postcode: row.postcode, address: row.address });
+    if(postcodeToUse){
+      await geocodeAssetPostcodes([{ id: savedId, postcode: row.postcode, address: row.address }]);
+    }
+  }
+
   closeModal('assetModalOverlay');
   await loadAssets();
   renderAssets();
