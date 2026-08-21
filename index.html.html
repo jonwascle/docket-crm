@@ -3362,16 +3362,18 @@ function enforceAssetNumberPrefix(){
 
 function nextAvailableAssetNumber(assetType){
   const prefix = ASSET_TYPE_PREFIX[assetType] || '';
-  const activeNumbers = new Set(
-    assets
-      .filter(a=>(a.assetType||'skip')===assetType && !a.retired)
-      .map(a=>{
-        const m = (a.assetNumber||'').match(/^\D*(\d+)/);
-        return m ? Number(m[1]) : null;
-      })
-      .filter(n=>n !== null)
-  );
-  let n = 1;
+  const extractNumber = a=>{
+    const m = (a.assetNumber||'').match(/^\D*(\d+)/);
+    return m ? Number(m[1]) : null;
+  };
+  const ofType = assets.filter(a=>(a.assetType||'skip')===assetType);
+  const allNumbers = ofType.map(extractNumber).filter(n=>n !== null);
+  const activeNumbers = new Set(ofType.filter(a=>!a.retired).map(extractNumber).filter(n=>n !== null));
+
+  // Start searching from the lowest number this type has ever used --
+  // not from 1 -- so retired gaps (like a scrapped 124) get suggested,
+  // without ever dropping back down to numbers this range never used.
+  let n = allNumbers.length ? Math.min(...allNumbers) : 1;
   while(activeNumbers.has(n)) n++;
   return prefix + n;
 }
