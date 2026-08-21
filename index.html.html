@@ -3367,13 +3367,12 @@ function nextAvailableAssetNumber(assetType){
     return m ? Number(m[1]) : null;
   };
   const ofType = assets.filter(a=>(a.assetType||'skip')===assetType);
-  const allNumbers = ofType.map(extractNumber).filter(n=>n !== null);
   const activeNumbers = new Set(ofType.filter(a=>!a.retired).map(extractNumber).filter(n=>n !== null));
 
-  // Start searching from the lowest number this type has ever used --
-  // not from 1 -- so retired gaps (like a scrapped 124) get suggested,
-  // without ever dropping back down to numbers this range never used.
-  let n = allNumbers.length ? Math.min(...allNumbers) : 1;
+  // Numbering always starts at 100 -- a firm rule, not derived from
+  // whatever happens to already exist -- then finds the first gap from
+  // there (picking up retired numbers like a scrapped 124 along the way).
+  let n = 100;
   while(activeNumbers.has(n)) n++;
   return prefix + n;
 }
