@@ -3410,7 +3410,7 @@ async function saveAsset(){
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
   });
 
-  if(assetType === 'skip'){
+  if(assetType === 'skip' && !data.retired){
     const missing = [];
     if(!data.customerName) missing.push('Customer name');
     if(!data.housingAssociation) missing.push('Housing association');
