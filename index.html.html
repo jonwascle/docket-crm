@@ -3266,6 +3266,7 @@ async function renderAssetsMap(){
 
 async function geocodeAssetPostcodes(assetsNeedingGeocode){
   const chunkSize = 100;
+  const stillUnresolved = [];
   for(let i=0; i<assetsNeedingGeocode.length; i+=chunkSize){
     const chunk = assetsNeedingGeocode.slice(i, i+chunkSize);
     try{
@@ -3275,7 +3276,7 @@ async function geocodeAssetPostcodes(assetsNeedingGeocode){
         body: JSON.stringify({ postcodes: chunk.map(a=>geocodableValue(a)) })
       });
       const data = await res.json();
-      if(!data || !data.result) continue;
+      if(!data || !data.result){ stillUnresolved.push(...chunk); continue; }
       for(let j=0; j<data.result.length; j++){
         const entry = data.result[j];
         const asset = chunk[j];
@@ -3283,13 +3284,42 @@ async function geocodeAssetPostcodes(assetsNeedingGeocode){
           asset.latitude = entry.result.latitude;
           asset.longitude = entry.result.longitude;
           await sb.from('assets').update({ latitude: asset.latitude, longitude: asset.longitude }).eq('id', asset.id);
+        }else{
+          // This exact postcode isn't recognised by postcodes.io (this
+          // does happen for some genuinely valid postcodes) -- fall
+          // back to a full-address lookup instead of leaving it unset.
+          stillUnresolved.push(asset);
         }
       }
     }catch(e){
-      showToast('Could not look up some postcodes — check your connection and try again.', true);
+      stillUnresolved.push(...chunk);
+    }
+  }
+
+  // Fallback: try full-address geocoding (OpenStreetMap's free
+  // Nominatim service) for anything the postcode-only lookup above
+  // couldn't resolve. This understands complete addresses, not just
+  // strict official postcodes, so it catches cases the first pass misses.
+  for(const asset of stillUnresolved){
+    const query = [asset.address, asset.postcode].filter(Boolean).join(', ');
+    if(!query) continue;
+    try{
+      const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=gb&q=' + encodeURIComponent(query));
+      const results = await res.json();
+      if(results && results[0]){
+        asset.latitude = Number(results[0].lat);
+        asset.longitude = Number(results[0].lon);
+        await sb.from('assets').update({ latitude: asset.latitude, longitude: asset.longitude }).eq('id', asset.id);
+      }
+      await new Promise(r=>setTimeout(r, 1100)); // Nominatim asks for max 1 request/second
+    }catch(e){
+      // Genuinely couldn't resolve this one automatically -- it'll
+      // still show up as needing a location, same as before, just
+      // after trying both approaches rather than just one.
     }
   }
 }
+
 
 function onAssetTypeChange(){
   const isScp = document.getElementById('aAssetType').value === 'scp';
