@@ -629,6 +629,7 @@
         <span class="subtab" data-subview="on_order" onclick="switchAssetSubview('on_order')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">On order</span>
         <span class="subtab" data-subview="scp" onclick="switchAssetSubview('scp')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Collection points</span>
       </div>
+      <div id="assetsStatsRow" style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;"></div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
         <input class="search-input" id="assetSearch" placeholder="Search by asset number, customer, address, or postcode" oninput="renderAssets()" style="flex:1;margin-bottom:0;">
         <button class="btn ghost small" id="assetsMapToggleBtn" onclick="toggleAssetsMapView()" style="white-space:nowrap;">Show on map</button>
@@ -1126,6 +1127,17 @@
         <option value="JS Burgess">JS Burgess</option>
         <option value="Premier Bodies">Premier Bodies</option>
       </select>
+    </div>
+
+    <div id="aReservedFieldsWrap" style="display:none;">
+      <div class="field"><label>Who is this smart skip for? (optional, just a note for now)</label><input id="aReservedForName" placeholder="e.g. Sovereign - possible new site"></div>
+      <div class="field"><label>What address is this smart skip for? (optional, rough note is fine)</label><input id="aReservedForAddress" placeholder="e.g. somewhere near Yeovil"></div>
+      <div class="field" style="background:#FDF3E0;padding:10px 12px;border-radius:6px;">
+        <label style="display:flex;align-items:center;gap:8px;margin:0;">
+          <input type="checkbox" id="aReservedConfirmed" style="width:auto;">
+          Customer has confirmed they want this smart skip — mark it as no longer available
+        </label>
+      </div>
     </div>
 
     <div id="fullDetailsSection">
@@ -3112,7 +3124,7 @@ const ASSET_FIELD_IDS = {
   fillSensor:'aFillSensor', qr:'aQr', signage:'aSignage',
   subbie:'aSubbie', groupedInvoicing:'aGroupedInvoicing', weeklyRental:'aWeeklyRental',
   masterPin:'aMasterPin', branch:'aBranch', branchContact:'aBranchContact',
-  notes:'aNotes', manufacturer:'aManufacturer'
+  notes:'aNotes', manufacturer:'aManufacturer', reservedForName:'aReservedForName', reservedForAddress:'aReservedForAddress'
 };
 
 function assetRowToCamel(row){
@@ -3125,7 +3137,8 @@ function assetRowToCamel(row){
     subbie: row.subbie, groupedInvoicing: row.grouped_invoicing, weeklyRental: row.weekly_rental,
     masterPin: row.master_pin, branch: row.branch, branchContact: row.branch_contact, notes: row.notes,
     latitude: row.latitude, longitude: row.longitude, retired: row.retired||false,
-    onOrder: row.on_order||false, manufacturer: row.manufacturer||null
+    onOrder: row.on_order||false, manufacturer: row.manufacturer||null,
+    reservedForName: row.reserved_for_name||null, reservedForAddress: row.reserved_for_address||null, reservedConfirmed: row.reserved_confirmed||false
   };
 }
 function camelToAssetRow(a){
@@ -3137,7 +3150,8 @@ function camelToAssetRow(a){
     padlock_number: a.padlockNumber||null, sensor_serial: a.sensorSerial||null, fill_sensor: a.fillSensor||null, qr: a.qr||null, signage: a.signage||null,
     subbie: a.subbie||null, grouped_invoicing: a.groupedInvoicing||null, weekly_rental: a.weeklyRental||null,
     master_pin: a.masterPin||null, branch: a.branch||null, branch_contact: a.branchContact||null, notes: a.notes||null,
-    retired: a.retired||false, on_order: a.onOrder||false, manufacturer: a.manufacturer||null
+    retired: a.retired||false, on_order: a.onOrder||false, manufacturer: a.manufacturer||null,
+    reserved_for_name: a.reservedForName||null, reserved_for_address: a.reservedForAddress||null, reserved_confirmed: a.reservedConfirmed||false
   };
 }
 
@@ -3164,8 +3178,30 @@ function switchAssetSubview(view){
   renderAssets();
 }
 
+function statCard(number, label){
+  return '<div class="panel" style="padding:12px 16px;min-width:120px;"><div style="font-size:22px;font-weight:700;color:var(--ink);">'+number+'</div><div style="font-size:12px;color:var(--slate);">'+label+'</div></div>';
+}
+
+function renderAssetsStats(){
+  const el = document.getElementById('assetsStatsRow');
+  if(currentAssetSubview === 'skip'){
+    const live = assets.filter(a=>(a.assetType||'skip')==='skip' && !a.onOrder && !a.retired);
+    const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000);
+    const deliveredRecently = live.filter(a=>a.sitedDate && new Date(a.sitedDate) >= thirtyDaysAgo);
+    el.innerHTML = statCard(live.length, 'Live smart skips') + statCard(deliveredRecently.length, 'Delivered in last 30 days');
+  }else if(currentAssetSubview === 'on_order'){
+    const onOrder = assets.filter(a=>(a.assetType||'skip')==='skip' && a.onOrder);
+    const available = onOrder.filter(a=>!a.reservedForName || !a.reservedForName.trim());
+    const earmarked = onOrder.length - available.length;
+    el.innerHTML = statCard(onOrder.length, 'In manufacture') + statCard(available.length, 'Available') + statCard(earmarked, 'Earmarked for a customer');
+  }else{
+    el.innerHTML = '';
+  }
+}
+
 function renderAssets(){
   if(assetsMapView){ renderAssetsMap(); return; }
+  renderAssetsStats();
   const q = (document.getElementById('assetSearch').value || '').toLowerCase();
   const container = document.getElementById('assetsListContainer');
   const filtered = assets.filter(a=>{
@@ -3180,7 +3216,7 @@ function renderAssets(){
     return (a.assetNumber||'').toLowerCase().includes(q) || (a.customerName||'').toLowerCase().includes(q) ||
            (a.address||'').toLowerCase().includes(q) || (a.postcode||'').toLowerCase().includes(q) ||
            (a.housingAssociation||'').toLowerCase().includes(q) || (a.branch||'').toLowerCase().includes(q) ||
-           (a.manufacturer||'').toLowerCase().includes(q);
+           (a.manufacturer||'').toLowerCase().includes(q) || (a.reservedForName||'').toLowerCase().includes(q) || (a.reservedForAddress||'').toLowerCase().includes(q);
   }).sort((a,b)=>(a.assetNumber||'').localeCompare(b.assetNumber||'', undefined, {numeric:true}));
 
   if(filtered.length===0){
@@ -3193,10 +3229,18 @@ function renderAssets(){
   }
 
   if(currentAssetSubview==='on_order'){
-    let html = '<table class="qtable"><thead><tr><th>Asset</th><th>Manufacturer</th></tr></thead><tbody>';
+    let html = '<table class="qtable"><thead><tr><th>Asset</th><th>Manufacturer</th><th>Who / where for</th><th>Status</th></tr></thead><tbody>';
     filtered.forEach(a=>{
+      const isEarmarked = a.reservedForName && a.reservedForName.trim();
+      const whoWhere = [a.reservedForName, a.reservedForAddress].filter(Boolean).join(' — ') || '—';
+      const statusBadge = a.reservedConfirmed
+        ? '<span class="badge" style="background:var(--stamp-green-bg,#EAF4EB);color:var(--stamp-green,#3E7A52);">Confirmed</span>'
+        : isEarmarked
+        ? '<span class="badge" style="background:#FDF3E0;color:#946200;">Earmarked</span>'
+        : '<span class="badge" style="background:#F0EBDD;color:#8A8884;">Available</span>';
       html += '<tr onclick="openAssetModal(\''+a.id+'\')" style="cursor:pointer;">';
       html += '<td><b>'+escapeHtml(a.assetNumber||'—')+'</b></td><td>'+escapeHtml(a.manufacturer||'—')+'</td>';
+      html += '<td>'+escapeHtml(whoWhere)+'</td><td>'+statusBadge+'</td>';
       html += '</tr>';
     });
     html += '</tbody></table>';
@@ -3439,6 +3483,8 @@ function openAssetModal(id){
   document.getElementById('aManufacturerField').style.display = (type==='skip') ? 'block' : 'none';
   document.getElementById('fullDetailsSection').style.display = isNewOnOrder ? 'none' : 'block';
   const isExistingOnOrder = !!(a && a.onOrder);
+  document.getElementById('aReservedFieldsWrap').style.display = (isNewOnOrder || isExistingOnOrder) ? 'block' : 'none';
+  document.getElementById('aReservedConfirmed').checked = a ? !!a.reservedConfirmed : false;
   document.getElementById('aMarkDeliveredField').style.display = isExistingOnOrder ? 'block' : 'none';
   document.getElementById('aMarkDelivered').checked = false;
   document.getElementById('assetDeleteBtn').style.display = a ? 'inline-flex' : 'none';
@@ -3456,7 +3502,7 @@ async function saveAsset(){
     const duplicate = assets.some(x=>x.id!==id && !x.retired && (x.assetNumber||'').trim().toUpperCase() === assetNumber.toUpperCase());
     if(duplicate){ showToast('An asset with number "'+assetNumber+'" already exists.', true); return; }
   }
-  const data = { assetType, retired: document.getElementById('aRetired').checked };
+  const data = { assetType, retired: document.getElementById('aRetired').checked, reservedConfirmed: document.getElementById('aReservedConfirmed').checked };
   Object.keys(ASSET_FIELD_IDS).forEach(key=>{
     if(key==='assetType') return;
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
