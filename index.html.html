@@ -635,6 +635,17 @@
         <button class="btn ghost small" id="assetsMapToggleBtn" onclick="toggleAssetsMapView()" style="white-space:nowrap;">Show on map</button>
       </div>
       <div id="assetsListContainer"></div>
+
+      <div id="skipRequestsSection" style="display:none;margin-top:32px;">
+        <div class="onboard-section">
+          <div class="onboard-section-head" style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="onboard-section-title">Potential requests</span>
+            <button class="btn small" onclick="openSkipRequestModal()">+ Add request</button>
+          </div>
+          <p style="font-size:13px;color:var(--slate);margin-top:0;">Enquiries from customers before a PO's actually been received — nothing's been ordered from the manufacturer yet, this is just so nothing gets forgotten.</p>
+          <div id="skipRequestsList"></div>
+        </div>
+      </div>
       <div id="assetsMapContainer" style="display:none;">
         <div id="assetsMapStatus" style="font-size:12.5px;color:var(--slate);margin-bottom:8px;"></div>
         <div id="assetsMap" style="height:520px;border-radius:8px;border:1px solid var(--border);"></div>
@@ -1224,6 +1235,24 @@
   </div>
 </div>
 
+<!-- ---------- Skip request modal ---------- -->
+<div class="modal-overlay" id="skipRequestModalOverlay">
+  <div class="modal">
+    <p class="modal-title"><span id="skipRequestModalTitle">New request</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('skipRequestModalOverlay')">✕</span></p>
+    <input type="hidden" id="skipRequestId">
+    <div class="field"><label>Customer name</label><input id="srCustomerName" placeholder="e.g. Bromford Housing"></div>
+    <div class="field"><label>Address / area (rough note is fine)</label><input id="srAddressNote" placeholder="e.g. somewhere near Yeovil"></div>
+    <div class="field"><label>Notes</label><textarea id="srNotes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn danger small" id="skipRequestDeleteBtn" style="display:none;" onclick="deleteSkipRequest()">Delete</button>
+      <div class="right">
+        <button class="btn ghost small" onclick="closeModal('skipRequestModalOverlay')">Cancel</button>
+        <button class="btn small" onclick="saveSkipRequest()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ---------- Task modal ---------- -->
 <div class="modal-overlay" id="taskModalOverlay">
   <div class="modal">
@@ -1344,6 +1373,7 @@ let mrRecordingCapTimer = null;
 let quoteDefaultPricingRows = [];
 let deals = [];
 let assets = [];
+let skipRequests = [];
 let quotes = [];
 let currentQuote = null;
 let tasks = [];
@@ -1727,6 +1757,7 @@ async function afterLogin(user){
   await loadContacts();
   await loadDeals();
   await loadAssets();
+  await loadSkipRequests();
   await loadQuotes();
   await loadTeamMembers();
   if(profile.role === 'manager' || profile.role === 'admin'){
@@ -3161,6 +3192,14 @@ async function loadAssets(){
   assets = (data||[]).map(assetRowToCamel);
 }
 
+async function loadSkipRequests(){
+  const { data, error } = await sb.from('skip_requests').select('*').order('created_at', {ascending:false});
+  if(error){ showToast('Could not load requests: ' + error.message, true); return; }
+  skipRequests = (data||[]).map(r=>({
+    id: r.id, customerName: r.customer_name, addressNote: r.address_note, notes: r.notes, createdAt: r.created_at
+  }));
+}
+
 function switchAssetSubview(view){
   currentAssetSubview = view;
   document.querySelectorAll('#view-assets .subtab').forEach(el=>el.classList.toggle('active', el.dataset.subview===view));
@@ -3174,8 +3213,10 @@ function switchAssetSubview(view){
     ? 'Search by asset number, customer, address, or postcode' : view==='on_order' ? 'Search by asset number or manufacturer'
     : 'Search by asset number, housing association, address, or branch';
   document.getElementById('assetsMapToggleBtn').style.display = view==='on_order' ? 'none' : 'inline-flex';
+  document.getElementById('skipRequestsSection').style.display = view==='on_order' ? 'block' : 'none';
   showAssetsListView();
   renderAssets();
+  if(view==='on_order') renderSkipRequests();
 }
 
 function statCard(number, label){
@@ -3193,10 +3234,69 @@ function renderAssetsStats(){
     const onOrder = assets.filter(a=>(a.assetType||'skip')==='skip' && a.onOrder);
     const available = onOrder.filter(a=>!a.reservedForName || !a.reservedForName.trim());
     const earmarked = onOrder.length - available.length;
-    el.innerHTML = statCard(onOrder.length, 'In manufacture') + statCard(available.length, 'Available') + statCard(earmarked, 'Earmarked for a customer');
+    el.innerHTML = statCard(onOrder.length, 'In manufacture') + statCard(available.length, 'Available') + statCard(earmarked, 'Earmarked for a customer') + statCard(skipRequests.length, 'Potential requests');
   }else{
     el.innerHTML = '';
   }
+}
+
+function renderSkipRequests(){
+  const el = document.getElementById('skipRequestsList');
+  if(skipRequests.length===0){
+    el.innerHTML = '<div class="empty-state">No potential requests logged yet.</div>';
+    return;
+  }
+  let html = '<table class="qtable"><thead><tr><th>Customer</th><th>Address / area</th><th>Notes</th><th>Logged</th></tr></thead><tbody>';
+  skipRequests.forEach(r=>{
+    html += '<tr onclick="openSkipRequestModal(\''+r.id+'\')" style="cursor:pointer;">';
+    html += '<td><b>'+escapeHtml(r.customerName||'—')+'</b></td><td>'+escapeHtml(r.addressNote||'—')+'</td>';
+    html += '<td>'+escapeHtml((r.notes||'').slice(0,60))+((r.notes||'').length>60?'…':'')+'</td>';
+    html += '<td>'+new Date(r.createdAt).toLocaleDateString('en-GB')+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function openSkipRequestModal(id){
+  document.getElementById('skipRequestId').value = id || '';
+  const r = id ? skipRequests.find(x=>x.id===id) : null;
+  document.getElementById('skipRequestModalTitle').textContent = r ? 'Edit request' : 'New request';
+  document.getElementById('srCustomerName').value = r ? (r.customerName||'') : '';
+  document.getElementById('srAddressNote').value = r ? (r.addressNote||'') : '';
+  document.getElementById('srNotes').value = r ? (r.notes||'') : '';
+  document.getElementById('skipRequestDeleteBtn').style.display = r ? 'inline-flex' : 'none';
+  document.getElementById('skipRequestModalOverlay').classList.add('active');
+}
+
+async function saveSkipRequest(){
+  const id = document.getElementById('skipRequestId').value;
+  const row = {
+    customer_name: document.getElementById('srCustomerName').value.trim() || null,
+    address_note: document.getElementById('srAddressNote').value.trim() || null,
+    notes: document.getElementById('srNotes').value.trim() || null,
+  };
+  let error;
+  if(id){ ({ error } = await sb.from('skip_requests').update(row).eq('id', id)); }
+  else{ ({ error } = await sb.from('skip_requests').insert(row)); }
+  if(error){ showToast('Could not save: ' + error.message, true); return; }
+  closeModal('skipRequestModalOverlay');
+  await loadSkipRequests();
+  renderSkipRequests();
+  renderAssetsStats();
+  showToast('Request saved.');
+}
+
+async function deleteSkipRequest(){
+  const id = document.getElementById('skipRequestId').value;
+  if(!id || !confirm('Delete this request?')) return;
+  const { error } = await sb.from('skip_requests').delete().eq('id', id);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  closeModal('skipRequestModalOverlay');
+  await loadSkipRequests();
+  renderSkipRequests();
+  renderAssetsStats();
+  showToast('Request deleted.');
 }
 
 function renderAssets(){
