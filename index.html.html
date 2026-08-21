@@ -626,6 +626,7 @@
       </div>
       <div class="subtabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);">
         <span class="subtab active" data-subview="skip" onclick="switchAssetSubview('skip')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Smart skips</span>
+        <span class="subtab" data-subview="on_order" onclick="switchAssetSubview('on_order')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">On order</span>
         <span class="subtab" data-subview="scp" onclick="switchAssetSubview('scp')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Collection points</span>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
@@ -1117,6 +1118,17 @@
     <input type="hidden" id="aAssetType" value="skip">
 
     <div class="field"><label>Asset number</label><input id="aAssetNumber" oninput="enforceAssetNumberPrefix()"></div>
+
+    <div class="field" id="aManufacturerField" style="display:none;">
+      <label>Manufacturer</label>
+      <select id="aManufacturer">
+        <option value="">Select manufacturer</option>
+        <option value="JS Burgess">JS Burgess</option>
+        <option value="Premier Bodies">Premier Bodies</option>
+      </select>
+    </div>
+
+    <div id="fullDetailsSection">
     <div class="field" id="aBatchField"><label>Batch / QR label</label><input id="aBatch"></div>
     <div class="field" id="aInformationField"><label>Status / information</label><input id="aInformation"></div>
     <div class="field"><label>Address</label><input id="aAddress"></div>
@@ -1174,6 +1186,7 @@
           <div class="field"><label>Weekly rental (monthly £)</label><input id="aWeeklyRental"></div>
         </div>
       </div>
+    </div>
     </div>
 
     <div class="field" style="display:flex;align-items:center;gap:8px;">
@@ -3093,7 +3106,7 @@ const ASSET_FIELD_IDS = {
   fillSensor:'aFillSensor', qr:'aQr', signage:'aSignage',
   subbie:'aSubbie', groupedInvoicing:'aGroupedInvoicing', weeklyRental:'aWeeklyRental',
   masterPin:'aMasterPin', branch:'aBranch', branchContact:'aBranchContact',
-  notes:'aNotes'
+  notes:'aNotes', manufacturer:'aManufacturer'
 };
 
 function assetRowToCamel(row){
@@ -3105,7 +3118,8 @@ function assetRowToCamel(row){
     padlockNumber: row.padlock_number, sensorSerial: row.sensor_serial, fillSensor: row.fill_sensor, qr: row.qr, signage: row.signage,
     subbie: row.subbie, groupedInvoicing: row.grouped_invoicing, weeklyRental: row.weekly_rental,
     masterPin: row.master_pin, branch: row.branch, branchContact: row.branch_contact, notes: row.notes,
-    latitude: row.latitude, longitude: row.longitude, retired: row.retired||false
+    latitude: row.latitude, longitude: row.longitude, retired: row.retired||false,
+    onOrder: row.on_order||false, manufacturer: row.manufacturer||null
   };
 }
 function camelToAssetRow(a){
@@ -3117,7 +3131,7 @@ function camelToAssetRow(a){
     padlock_number: a.padlockNumber||null, sensor_serial: a.sensorSerial||null, fill_sensor: a.fillSensor||null, qr: a.qr||null, signage: a.signage||null,
     subbie: a.subbie||null, grouped_invoicing: a.groupedInvoicing||null, weekly_rental: a.weeklyRental||null,
     master_pin: a.masterPin||null, branch: a.branch||null, branch_contact: a.branchContact||null, notes: a.notes||null,
-    retired: a.retired||false
+    retired: a.retired||false, on_order: a.onOrder||false, manufacturer: a.manufacturer||null
   };
 }
 
@@ -3130,13 +3144,16 @@ async function loadAssets(){
 function switchAssetSubview(view){
   currentAssetSubview = view;
   document.querySelectorAll('#view-assets .subtab').forEach(el=>el.classList.toggle('active', el.dataset.subview===view));
-  document.getElementById('assetsViewTitle').textContent = view==='skip' ? 'Smart skips' : 'Collection points';
+  document.getElementById('assetsViewTitle').textContent = view==='skip' ? 'Smart skips' : view==='on_order' ? 'On order' : 'Collection points';
   document.getElementById('assetsViewSub').textContent = view==='skip'
-    ? 'Your fleet of smart skips out with customers.' : 'Your smart collection points and locker sites.';
-  document.getElementById('assetsAddBtn').textContent = view==='skip' ? '+ New smart skip' : '+ New collection point';
+    ? 'Your fleet of smart skips out with customers.' : view==='on_order'
+    ? 'Smart skips being manufactured, with an asset number allocated but not yet earmarked for a customer.'
+    : 'Your smart collection points and locker sites.';
+  document.getElementById('assetsAddBtn').textContent = view==='skip' ? '+ New smart skip' : view==='on_order' ? '+ New on-order skip' : '+ New collection point';
   document.getElementById('assetSearch').placeholder = view==='skip'
-    ? 'Search by asset number, customer, address, or postcode' : 'Search by asset number, housing association, address, or branch';
-  document.getElementById('assetsMapToggleBtn').style.display = 'inline-flex';
+    ? 'Search by asset number, customer, address, or postcode' : view==='on_order' ? 'Search by asset number or manufacturer'
+    : 'Search by asset number, housing association, address, or branch';
+  document.getElementById('assetsMapToggleBtn').style.display = view==='on_order' ? 'none' : 'inline-flex';
   showAssetsListView();
   renderAssets();
 }
@@ -3146,20 +3163,41 @@ function renderAssets(){
   const q = (document.getElementById('assetSearch').value || '').toLowerCase();
   const container = document.getElementById('assetsListContainer');
   const filtered = assets.filter(a=>{
-    if((a.assetType||'skip') !== currentAssetSubview) return false;
+    if(currentAssetSubview==='on_order'){
+      if((a.assetType||'skip') !== 'skip' || !a.onOrder) return false;
+    }else if(currentAssetSubview==='skip'){
+      if((a.assetType||'skip') !== 'skip' || a.onOrder) return false;
+    }else{
+      if((a.assetType||'skip') !== currentAssetSubview) return false;
+    }
     if(!q) return true;
     return (a.assetNumber||'').toLowerCase().includes(q) || (a.customerName||'').toLowerCase().includes(q) ||
            (a.address||'').toLowerCase().includes(q) || (a.postcode||'').toLowerCase().includes(q) ||
-           (a.housingAssociation||'').toLowerCase().includes(q) || (a.branch||'').toLowerCase().includes(q);
+           (a.housingAssociation||'').toLowerCase().includes(q) || (a.branch||'').toLowerCase().includes(q) ||
+           (a.manufacturer||'').toLowerCase().includes(q);
   }).sort((a,b)=>(a.assetNumber||'').localeCompare(b.assetNumber||'', undefined, {numeric:true}));
 
   if(filtered.length===0){
     container.innerHTML = '<div class="empty-state">' +
-      (assets.filter(a=>(a.assetType||'skip')===currentAssetSubview).length===0
-        ? (currentAssetSubview==='skip' ? 'No smart skips yet. Add your first one.' : 'No collection points yet. Add your first one.')
-        : 'No assets match that search.') + '</div>';
+      (q ? 'No assets match that search.'
+        : currentAssetSubview==='skip' ? 'No smart skips yet. Add your first one.'
+        : currentAssetSubview==='on_order' ? 'Nothing on order right now.'
+        : 'No collection points yet. Add your first one.') + '</div>';
     return;
   }
+
+  if(currentAssetSubview==='on_order'){
+    let html = '<table class="qtable"><thead><tr><th>Asset</th><th>Manufacturer</th></tr></thead><tbody>';
+    filtered.forEach(a=>{
+      html += '<tr onclick="openAssetModal(\''+a.id+'\')" style="cursor:pointer;">';
+      html += '<td><b>'+escapeHtml(a.assetNumber||'—')+'</b></td><td>'+escapeHtml(a.manufacturer||'—')+'</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    return;
+  }
+
   const isScp = currentAssetSubview === 'scp';
   let html = '<table class="qtable"><thead><tr>';
   html += isScp
@@ -3380,8 +3418,9 @@ function nextAvailableAssetNumber(assetType){
 function openAssetModal(id){
   document.getElementById('assetId').value = id || '';
   const a = id ? assets.find(x=>x.id===id) : null;
-  const type = a ? (a.assetType||'skip') : currentAssetSubview;
-  document.getElementById('assetModalTitle').textContent = a ? 'Edit asset' : 'New asset';
+  const isNewOnOrder = !a && currentAssetSubview === 'on_order';
+  const type = a ? (a.assetType||'skip') : (currentAssetSubview === 'on_order' ? 'skip' : currentAssetSubview);
+  document.getElementById('assetModalTitle').textContent = a ? 'Edit asset' : (isNewOnOrder ? 'New on-order skip' : 'New asset');
   Object.keys(ASSET_FIELD_IDS).forEach(key=>{
     if(key==='assetType') return;
     document.getElementById(ASSET_FIELD_IDS[key]).value = a ? (a[key]||'') : '';
@@ -3389,7 +3428,10 @@ function openAssetModal(id){
   document.getElementById('aAssetType').value = type;
   if(!a){ document.getElementById('aAssetNumber').value = nextAvailableAssetNumber(type); }
   document.getElementById('aRetired').checked = a ? !!a.retired : false;
+  window._openingAsOnOrder = isNewOnOrder || (a ? !!a.onOrder : false);
   onAssetTypeChange();
+  document.getElementById('aManufacturerField').style.display = (type==='skip') ? 'block' : 'none';
+  document.getElementById('fullDetailsSection').style.display = isNewOnOrder ? 'none' : 'block';
   document.getElementById('assetDeleteBtn').style.display = a ? 'inline-flex' : 'none';
   document.getElementById('assetModalOverlay').classList.add('active');
 }
@@ -3411,7 +3453,16 @@ async function saveAsset(){
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
   });
 
-  if(assetType === 'skip' && !data.retired){
+  // An on-order skip automatically graduates to a normal in-production
+  // one the moment its full details (customer, housing association,
+  // address) are filled in and saved -- no separate "promote" action
+  // needed, it just happens naturally as the form gets completed.
+  const hasFullDetails = !!(data.customerName && data.housingAssociation && data.address);
+  const wasOnOrder = !!window._openingAsOnOrder;
+  data.onOrder = wasOnOrder && !hasFullDetails;
+  const justPromoted = wasOnOrder && hasFullDetails;
+
+  if(assetType === 'skip' && !data.retired && !data.onOrder){
     const missing = [];
     if(!data.customerName) missing.push('Customer name');
     if(!data.housingAssociation) missing.push('Housing association');
@@ -3446,7 +3497,7 @@ async function saveAsset(){
   closeModal('assetModalOverlay');
   await loadAssets();
   renderAssets();
-  showToast('Asset saved.');
+  showToast(justPromoted ? 'Asset saved — this skip has moved from On order into your Smart skips list.' : 'Asset saved.');
 }
 
 async function deleteAsset(){
