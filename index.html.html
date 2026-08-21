@@ -1129,6 +1129,12 @@
     </div>
 
     <div id="fullDetailsSection">
+    <div class="field" id="aMarkDeliveredField" style="display:none;background:#EAF4EB;padding:10px 12px;border-radius:6px;">
+      <label style="display:flex;align-items:center;gap:8px;margin:0;">
+        <input type="checkbox" id="aMarkDelivered" style="width:auto;">
+        This smart skip is now delivered and live — move it from On order into the main Smart Skips list
+      </label>
+    </div>
     <div class="field" id="aBatchField"><label>Batch / QR label</label><input id="aBatch"></div>
     <div class="field" id="aInformationField"><label>Status / information</label><input id="aInformation"></div>
     <div class="field"><label>Address</label><input id="aAddress"></div>
@@ -3432,6 +3438,9 @@ function openAssetModal(id){
   onAssetTypeChange();
   document.getElementById('aManufacturerField').style.display = (type==='skip') ? 'block' : 'none';
   document.getElementById('fullDetailsSection').style.display = isNewOnOrder ? 'none' : 'block';
+  const isExistingOnOrder = !!(a && a.onOrder);
+  document.getElementById('aMarkDeliveredField').style.display = isExistingOnOrder ? 'block' : 'none';
+  document.getElementById('aMarkDelivered').checked = false;
   document.getElementById('assetDeleteBtn').style.display = a ? 'inline-flex' : 'none';
   document.getElementById('assetModalOverlay').classList.add('active');
 }
@@ -3453,14 +3462,25 @@ async function saveAsset(){
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
   });
 
-  // An on-order skip automatically graduates to a normal in-production
-  // one the moment its full details (customer, housing association,
-  // address) are filled in and saved -- no separate "promote" action
-  // needed, it just happens naturally as the form gets completed.
-  const hasFullDetails = !!(data.customerName && data.housingAssociation && data.address);
+  // On-order skips can be earmarked for a customer (customer, housing
+  // association, address filled in) while still being manufactured --
+  // that alone does NOT move them out of On order. They only move to
+  // the main Smart Skips list once explicitly marked delivered/live.
   const wasOnOrder = !!window._openingAsOnOrder;
-  data.onOrder = wasOnOrder && !hasFullDetails;
-  const justPromoted = wasOnOrder && hasFullDetails;
+  const markingDelivered = wasOnOrder && document.getElementById('aMarkDelivered').checked;
+  data.onOrder = wasOnOrder && !markingDelivered;
+  const justPromoted = markingDelivered;
+
+  if(markingDelivered){
+    const missing = [];
+    if(!data.customerName) missing.push('Customer name');
+    if(!data.housingAssociation) missing.push('Housing association');
+    if(!data.address) missing.push('Address');
+    if(missing.length){
+      showToast('Fill in these before marking delivered/live: ' + missing.join(', ') + '.', true);
+      return;
+    }
+  }
 
   if(assetType === 'skip' && !data.retired && !data.onOrder){
     const missing = [];
