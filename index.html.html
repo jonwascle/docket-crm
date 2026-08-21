@@ -3608,6 +3608,11 @@ async function saveAsset(){
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
   });
 
+  if(data.reservedConfirmed && (!data.reservedForName || !data.reservedForAddress)){
+    showToast('Fill in who this smart skip is for and its address before confirming.', true);
+    return;
+  }
+
   // On-order skips can be earmarked for a customer (customer, housing
   // association, address filled in) while still being manufactured --
   // that alone does NOT move them out of On order. They only move to
