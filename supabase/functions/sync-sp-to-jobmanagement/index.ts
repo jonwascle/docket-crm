@@ -1,6 +1,6 @@
 // Supabase Edge Function: sync-sp-to-jobmanagement
 //
-// Called from Docket (index.html) when a service provider is marked
+// Called from Dockit (index.html) when a service provider is marked
 // "Entered on Wapp". Forwards the provider's onboarding data to the
 // jobmanagement (Wapp) API. The shared API key is kept here as a
 // Supabase secret and never reaches the browser.

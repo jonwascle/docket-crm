@@ -3,7 +3,7 @@
 //
 // Handles two things:
 //   'sync_contact'  - creates/updates a Klaviyo profile for a contact
-//                     (used whenever a new contact is added in Docket)
+//                     (used whenever a new contact is added in Dockit)
 //   'track_event'   - records a named event against a profile, which
 //                     can then trigger Klaviyo flows/automations
 //                     (used for quote sent, customer live, deal won)

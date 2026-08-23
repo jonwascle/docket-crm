@@ -1,10 +1,10 @@
--- Docket CRM — live database schema (pulled from Supabase, project sjqjqthjvohebnjtaqaz)
+-- Dockit CRM — live database schema (pulled from Supabase, project sjqjqthjvohebnjtaqaz)
 -- Reference only: reconstructed from information_schema via the Supabase MCP
 -- list_tables call. Not a pg_dump — column order and exact defaults are
 -- accurate, but this has not been applied/tested as a runnable migration.
 
 -- ============================================================================
--- profiles — one row per Docket login (mirrors auth.users)
+-- profiles — one row per Dockit login (mirrors auth.users)
 -- ============================================================================
 create table public.profiles (
   id uuid primary key references auth.users(id),

@@ -22,7 +22,7 @@ verify_jwt = false
 [functions.send-sp-document-expiry-reminders]
 verify_jwt = false
 
-[functions.docket-help-chat]
+[functions.dockit-help-chat]
 verify_jwt = false
 
 [functions.send-sp-wapp-notification]

@@ -1,7 +1,7 @@
 // This runs on Supabase's servers, never in the browser.
 //
 // It's called two different ways:
-//  1. By Docket itself, right when a task is assigned to someone — sends
+//  1. By Dockit itself, right when a task is assigned to someone — sends
 //     one immediate email for that specific task.
 //  2. By a scheduled job (see the cron setup in the deployment notes) once
 //     a day — checks every open, assigned task and emails anyone whose
@@ -17,7 +17,7 @@
 // Functions -> send-task-reminders -> Settings -> Secrets):
 //   SMTP2GO_API_KEY    - the API key from SMTP2GO
 //   TASK_EMAIL_FROM    - the verified "from" address, e.g.
-//                        "Docket <tasks@wascle.co.uk>"
+//                        "Dockit <tasks@wascle.co.uk>"
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const appUrl = Deno.env.get('DOCKET_APP_URL') || 'https://docket-wascle.vercel.app';
+    const appUrl = Deno.env.get('DOCKIT_APP_URL') || 'https://dockit-wascle.vercel.app';
     let tasksToNotify;
 
     if (body.taskId) {
@@ -118,11 +118,11 @@ Deno.serve(async (req) => {
       }
       const html = `
         <p>Hi ${escapeHtmlServer(assignee.name || 'there')},</p>
-        <p>You've got an open task in Docket:</p>
+        <p>You've got an open task in Dockit:</p>
         <p style="font-size:16px;font-weight:600;margin:16px 0 4px;">${escapeHtmlServer(task.title)}</p>
         ${task.notes ? `<p style="color:#555;margin:0 0 16px;">${escapeHtmlServer(task.notes)}</p>` : ''}
         ${urgencyBanner}
-        <p><a href="${link}" style="display:inline-block;background:#1B1B1B;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;">View this task in Docket</a></p>
+        <p><a href="${link}" style="display:inline-block;background:#1B1B1B;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;">View this task in Dockit</a></p>
         <p style="color:#999;font-size:12px;margin-top:24px;">You'll get a reminder like this every couple of days until it's marked done — daily if it's overdue or due very soon.</p>
       `;
 

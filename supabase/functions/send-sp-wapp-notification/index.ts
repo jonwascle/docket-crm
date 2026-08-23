@@ -1,6 +1,6 @@
 // This runs on Supabase's servers, never in the browser.
 //
-// Called by Docket the moment "Entered on Wapp" is marked complete for a
+// Called by Dockit the moment "Entered on Wapp" is marked complete for a
 // service provider. Sends the full setup summary PDF (company details,
 // team, waste transfer stations, pricing) to whichever addresses are set
 // up under Team -> Notification emails — the same list used for the
@@ -91,8 +91,8 @@ function buildWappNotificationEmailHtml(spName: string) {
         <div style="border-left: 3px solid #F5B429; background-color: #FDF6E7; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 0 0 20px;">
           <p style="margin: 0;"><b>New service provider set up.</b></p>
         </div>
-        <p style="margin: 0 0 16px;"><b>${safeSpName}</b> has just been entered onto Loop in Docket. Their full setup details are attached — company details, team, waste transfer stations, and agreed pricing.</p>
-        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Docket.</p>
+        <p style="margin: 0 0 16px;"><b>${safeSpName}</b> has just been entered onto Loop in Dockit. Their full setup details are attached — company details, team, waste transfer stations, and agreed pricing.</p>
+        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Dockit.</p>
       </div>
       <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
     </div>

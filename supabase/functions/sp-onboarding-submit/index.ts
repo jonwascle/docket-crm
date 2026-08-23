@@ -1,7 +1,7 @@
 // This runs on Supabase's servers, never in the browser.
 //
 // It's what lets a service provider fill in their own details through a
-// link — with NO Docket login — without opening up direct anonymous
+// link — with NO Dockit login — without opening up direct anonymous
 // writes to the database. The link just carries a token; this function
 // checks the token is real, then does the actual writing itself using the
 // privileged service role key.
@@ -16,11 +16,11 @@
 //
 // Sends two kinds of emails via SMTP2GO, using different senders:
 //   TASK_EMAIL_FROM  - the internal notification to whichever staff
-//                       member owns this recruitment (mentions Docket,
+//                       member owns this recruitment (mentions Dockit,
 //                       since staff know what that is)
 //   SP_EMAIL_FROM    - the supplier-facing "thanks, here's your link"
 //                       confirmation (a no-reply address, and never
-//                       mentions Docket, since suppliers don't know it)
+//                       mentions Dockit, since suppliers don't know it)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
           if (spEmail) {
             // Rebuild the same public link the supplier used, from this
             // request's origin (falls back to the known production URL).
-            const origin = req.headers.get('origin') || 'https://docket-wascle.vercel.app';
+            const origin = req.headers.get('origin') || 'https://dockit-wascle.vercel.app';
             const continueLink = origin + '/#supplier-onboard=' + token;
             const html = buildFollowUpEmailHtml(spName, continueLink);
             await sendEmail([spEmail], 'Thanks for the update — Wascle onboarding', html, [], 'SP_EMAIL_FROM');
@@ -281,7 +281,7 @@ function escapeHtmlServer(str: string) {
 function buildStaffNotificationEmailHtml(staffName: string, spName: string, isFinal: boolean, spId: string) {
   const greetingName = escapeHtmlServer((staffName || '').split(' ')[0] || 'there');
   const safeSpName = escapeHtmlServer(spName);
-  const docketLink = 'https://docket-wascle.vercel.app/#view=serviceproviders&sp=' + spId + '&subtab=recruitment';
+  const dockitLink = 'https://dockit-wascle.vercel.app/#view=serviceproviders&sp=' + spId + '&subtab=recruitment';
   const statusLine = isFinal
     ? `<b>${safeSpName}</b> has just finished submitting their onboarding form.`
     : `<b>${safeSpName}</b> has just saved some progress on their onboarding form — they may still be filling in the rest.`;
@@ -302,9 +302,9 @@ function buildStaffNotificationEmailHtml(staffName: string, spName: string, isFi
           <p style="margin: 0;">${statusLine}</p>
         </div>
         <p style="margin: 0 0 24px;text-align:center;">
-          <a href="${docketLink}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">View in Docket →</a>
+          <a href="${dockitLink}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">View in Dockit →</a>
         </p>
-        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Docket.</p>
+        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Dockit.</p>
       </div>
       <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
     </div>

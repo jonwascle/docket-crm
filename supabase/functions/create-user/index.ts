@@ -1,5 +1,5 @@
 // This runs on Supabase's servers, never in the browser.
-// It's the only piece of Docket allowed to hold the powerful "service role"
+// It's the only piece of Dockit allowed to hold the powerful "service role"
 // key — that's why creating, editing, or deleting logins can't just happen
 // directly from the website.
 
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
         const { data: linkRow } = await adminClient
           .from('password_setup_tokens').insert({ user_id: newUser.user.id }).select('token').single();
         if (linkRow) {
-          const origin = req.headers.get('origin') || 'https://docket-wascle.vercel.app';
+          const origin = req.headers.get('origin') || 'https://dockit-wascle.vercel.app';
           const setupLink = origin + '/#set-password=' + linkRow.token;
           await sendWelcomeEmail(email, name, setupLink);
         }
@@ -207,15 +207,15 @@ async function sendWelcomeEmail(email: string, name: string, setupLink: string) 
       <div style="padding: 36px 32px 8px; font-family: Arial, sans-serif; font-size: 14.5px; line-height: 1.65; color: #1B1B1B;">
         <p style="margin: 0 0 16px;">Hi ${greetingName},</p>
         <div style="border-left: 3px solid #F5B429; background-color: #FDF6E7; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 0 0 20px;">
-          <p style="margin: 0;"><b>Welcome to Docket!</b></p>
+          <p style="margin: 0;"><b>Welcome to Dockit!</b></p>
         </div>
         <p style="margin: 0 0 16px;">Your account has been set up. Your username is your email address: <b>${escapeHtmlServer(email)}</b></p>
         <p style="margin: 0 0 16px;">Before you can sign in, please set your own password using the button below.</p>
         <p style="margin: 0 0 24px;text-align:center;">
           <a href="${escapeHtmlServer(setupLink)}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">Set your password →</a>
         </p>
-        <p style="margin: 0 0 16px;">Docket: <a href="https://docket-wascle.vercel.app" style="color:#B8860B;">docket-wascle.vercel.app</a></p>
-        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Docket.</p>
+        <p style="margin: 0 0 16px;">Dockit: <a href="https://dockit-wascle.vercel.app" style="color:#B8860B;">dockit-wascle.vercel.app</a></p>
+        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Dockit.</p>
       </div>
       <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
     </div>
@@ -229,7 +229,7 @@ async function sendWelcomeEmail(email: string, name: string, setupLink: string) 
   await fetch('https://api.smtp2go.com/v3/email/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, sender: fromAddress, to: [email], subject: 'Welcome to Docket', html_body: html }),
+    body: JSON.stringify({ api_key: apiKey, sender: fromAddress, to: [email], subject: 'Welcome to Dockit', html_body: html }),
   });
 }
 

@@ -1,6 +1,6 @@
 // This runs on Supabase's servers, never in the browser.
 //
-// Called by Docket right after an organisation is marked as a live
+// Called by Dockit right after an organisation is marked as a live
 // customer (see generateAndSendOnboardingPdf in index.html.html). Emails
 // the onboarding summary PDF to whichever addresses are set up under
 // Team -> Notification emails — the same list used for the service
@@ -91,8 +91,8 @@ function buildOnboardingNotificationEmailHtml(orgName: string) {
         <div style="border-left: 3px solid #F5B429; background-color: #FDF6E7; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 0 0 20px;">
           <p style="margin: 0;"><b>New customer marked as live.</b></p>
         </div>
-        <p style="margin: 0 0 16px;"><b>${safeOrgName}</b> has just been marked as a live customer in Docket. Their full onboarding summary is attached — company details, waste bags, smart skip, and property clearance setup.</p>
-        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Docket.</p>
+        <p style="margin: 0 0 16px;"><b>${safeOrgName}</b> has just been marked as a live customer in Dockit. Their full onboarding summary is attached — company details, waste bags, smart skip, and property clearance setup.</p>
+        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Dockit.</p>
       </div>
       <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
     </div>

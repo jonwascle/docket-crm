@@ -5,7 +5,7 @@
 //                        been submitted. Emails every admin with the
 //                        full details.
 //   'notify_released'  - an admin has just marked something as
-//                        released. Emails every single Docket user
+//                        released. Emails every single Dockit user
 //                        (not just admins) with what changed.
 //
 // Needs the same two secrets as the other internal emails
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     // This one action is deliberately public — it's what powers the
     // "watch the demo" link in release announcement emails, and those
-    // get opened by people who aren't necessarily signed into Docket.
+    // get opened by people who aren't necessarily signed into Dockit.
     if (action === 'get_public_release') {
       const { requestId } = body;
       console.log('DEBUG get_public_release requestId:', requestId);
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       for (const p of recipients) {
         try {
           const html = buildReleasedEmailHtml(reqRow, p.name);
-          const result = await sendEmail([p.email], `${typeLabel} in Docket: ${reqRow.title}`, html);
+          const result = await sendEmail([p.email], `${typeLabel} in Dockit: ${reqRow.title}`, html);
           if (!result.error) sent++;
         } catch (e) { /* keep going for everyone else */ }
       }
@@ -144,13 +144,13 @@ function buildAdminNotifyEmailHtml(reqRow, submitter) {
         <img src="data:image/jpeg;base64,${LOGO_JPEG_BASE64}" alt="Wascle" width="160" style="display:block;">
       </div>
       <div style="padding: 36px 32px 8px; font-family: Arial, sans-serif; font-size: 14.5px; line-height: 1.65; color: #1B1B1B;">
-        <p style="margin: 0 0 16px;">New ${typeLabel.toLowerCase()} submitted in Docket.</p>
+        <p style="margin: 0 0 16px;">New ${typeLabel.toLowerCase()} submitted in Dockit.</p>
         <div style="border-left: 3px solid #F5B429; background-color: #FDF6E7; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 0 0 20px;">
           <p style="margin: 0 0 8px;"><b>${escapeHtmlServer(reqRow.title)}</b></p>
           <p style="margin: 0;white-space:pre-wrap;">${escapeHtmlServer(reqRow.details || 'No further details given.')}</p>
         </div>
         <p style="margin: 0 0 16px;color:#7A7568;">Submitted by ${submitterName} on ${new Date(reqRow.submitted_at).toLocaleDateString('en-GB')}.</p>
-        <p style="margin: 0 0 32px;">See the Feedback section in Docket for the full tracker, including a copy-friendly version of this request.</p>
+        <p style="margin: 0 0 32px;">See the Feedback section in Dockit for the full tracker, including a copy-friendly version of this request.</p>
       </div>
       <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
     </div>
@@ -180,7 +180,7 @@ function buildReleasedEmailHtml(reqRow, recipientName) {
   const watchLinkSection = reqRow.release_video_path
     ? `<p style="margin: 28px 0 12px;">Watch the short video below explaining this ${typeLabel}:</p>
        <p style="margin: 0;text-align:center;">
-         <a href="https://docket-wascle.vercel.app/#watch-demo=${reqRow.id}" style="display: inline-block; background-color: #1B1B1B; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing:0.2px;">▶&nbsp;&nbsp;Watch the video</a>
+         <a href="https://dockit-wascle.vercel.app/#watch-demo=${reqRow.id}" style="display: inline-block; background-color: #1B1B1B; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing:0.2px;">▶&nbsp;&nbsp;Watch the video</a>
        </p>`
     : '';
 
@@ -202,12 +202,12 @@ function buildReleasedEmailHtml(reqRow, recipientName) {
         ${transcriptSection}
         ${watchLinkSection}
         <div style="border-top:1px solid #EFEBE2;margin:36px 0 0;padding-top:20px;">
-          <p style="margin: 0 0 28px;color:#9A9488;font-size:12.5px;">Curious what else is in the pipeline, or want to suggest something yourself? Head to the <b style="color:#55504a;">Feedback</b> section in Docket any time.</p>
+          <p style="margin: 0 0 28px;color:#9A9488;font-size:12.5px;">Curious what else is in the pipeline, or want to suggest something yourself? Head to the <b style="color:#55504a;">Feedback</b> section in Dockit any time.</p>
         </div>
       </div>
       <div style="height: 5px; background: linear-gradient(90deg, ${accentColor} 0%, #f0a51e 100%);"></div>
     </div>
-    <p style="text-align:center;color:#B0A99A;font-size:11.5px;margin:20px 0 0;">This is an automatic notification from Docket.</p>
+    <p style="text-align:center;color:#B0A99A;font-size:11.5px;margin:20px 0 0;">This is an automatic notification from Dockit.</p>
   </div>
 </body></html>
   `;

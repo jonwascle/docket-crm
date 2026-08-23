@@ -1,6 +1,6 @@
 // This runs on Supabase's servers, never in the browser.
 //
-// Handles three things, all related to setting or resetting a Docket
+// Handles three things, all related to setting or resetting a Dockit
 // password:
 //   'request_reset'         - a "forgot password" request from the login
 //                             screen. Public, no login needed (since the
@@ -12,7 +12,7 @@
 //                             member telling them they'll need to set a
 //                             new password next time they sign in
 //                             (they still use their current password to
-//                             log in -- Docket prompts them in-app once
+//                             log in -- Dockit prompts them in-app once
 //                             they're signed in, no link needed for that
 //                             part).
 //
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       const { data: profile } = await adminClient.from('profiles').select('id, name, email').ilike('email', email).maybeSingle();
       // Deliberately return success either way, whether or not that email
       // matches an account -- so this can't be used to check who has a
-      // Docket login.
+      // Dockit login.
       if (!profile) {
         return json({ success: true }, 200);
       }
@@ -60,10 +60,10 @@ Deno.serve(async (req) => {
         .from('password_setup_tokens').insert({ user_id: profile.id }).select('token').single();
       if (linkErr) return json({ error: linkErr.message }, 500);
 
-      const origin = req.headers.get('origin') || 'https://docket-wascle.vercel.app';
+      const origin = req.headers.get('origin') || 'https://dockit-wascle.vercel.app';
       const resetLink = origin + '/#set-password=' + linkRow.token;
       const html = buildPasswordEmailHtml(profile.name, resetLink, 'reset');
-      await sendEmail([profile.email], 'Reset your Docket password', html);
+      await sendEmail([profile.email], 'Reset your Dockit password', html);
 
       return json({ success: true }, 200);
     }
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
       for (const p of (allProfiles || [])) {
         try {
           const html = buildPasswordEmailHtml(p.name, null, 'notify');
-          const result = await sendEmail([p.email], 'Please reset your Docket password', html);
+          const result = await sendEmail([p.email], 'Please reset your Dockit password', html);
           if (!result.error) sent++;
         } catch (e) { /* keep going for the rest */ }
       }
@@ -138,13 +138,13 @@ function buildPasswordEmailHtml(name: string, link: string | null, kind: 'welcom
   let bodyHtml = '';
   let buttonHtml = '';
   if (kind === 'welcome') {
-    bodyHtml = `<p style="margin: 0 0 16px;">Welcome to Docket! Your account has been set up — your username is your email address.</p><p style="margin: 0 0 16px;">Before you can sign in, please set your own password using the button below.</p>`;
+    bodyHtml = `<p style="margin: 0 0 16px;">Welcome to Dockit! Your account has been set up — your username is your email address.</p><p style="margin: 0 0 16px;">Before you can sign in, please set your own password using the button below.</p>`;
     buttonHtml = `<a href="${escapeHtmlServer(link || '')}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">Set your password →</a>`;
   } else if (kind === 'reset') {
-    bodyHtml = `<p style="margin: 0 0 16px;">We received a request to reset your Docket password. Click below to set a new one.</p><p style="margin: 0 0 16px;">If you didn't ask for this, you can safely ignore this email — your password won't change unless you click the link.</p>`;
+    bodyHtml = `<p style="margin: 0 0 16px;">We received a request to reset your Dockit password. Click below to set a new one.</p><p style="margin: 0 0 16px;">If you didn't ask for this, you can safely ignore this email — your password won't change unless you click the link.</p>`;
     buttonHtml = `<a href="${escapeHtmlServer(link || '')}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">Reset your password →</a>`;
   } else {
-    bodyHtml = `<p style="margin: 0 0 16px;">As part of a recent security update, you'll be asked to set a new password the next time you sign in to Docket.</p><p style="margin: 0 0 16px;">Just sign in as normal using your current password — Docket will prompt you to choose a new one straight away.</p>`;
+    bodyHtml = `<p style="margin: 0 0 16px;">As part of a recent security update, you'll be asked to set a new password the next time you sign in to Dockit.</p><p style="margin: 0 0 16px;">Just sign in as normal using your current password — Dockit will prompt you to choose a new one straight away.</p>`;
   }
   return `<!DOCTYPE html>
 <html>
@@ -161,7 +161,7 @@ function buildPasswordEmailHtml(name: string, link: string | null, kind: 'welcom
         <p style="margin: 0 0 16px;">Hi ${greetingName},</p>
         ${bodyHtml}
         ${buttonHtml ? `<p style="margin: 0 0 24px;text-align:center;">${buttonHtml}</p>` : ''}
-        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Docket.</p>
+        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Dockit.</p>
       </div>
       <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
     </div>

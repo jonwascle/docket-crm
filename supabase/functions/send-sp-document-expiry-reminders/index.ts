@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
           link = newLink;
         }
 
-        const uploadLink = 'https://docket-wascle.vercel.app/#supplier-onboard=' + link.token;
+        const uploadLink = 'https://dockit-wascle.vercel.app/#supplier-onboard=' + link.token;
         const html = buildExpiryReminderEmailHtml(sp.name, doc.document_name, doc.expiry_date, uploadLink);
         const result = await sendEmail([sp.email], 'Action needed: ' + doc.document_name + ' expiring soon', html);
         if (result.error) { skipped++; continue; }

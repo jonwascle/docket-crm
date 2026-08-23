@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Docket CRM</title>
+<title>Dockit CRM</title>
 <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -172,7 +172,7 @@
 <!-- ============ QUICK ADD TASK (mobile-friendly shortcut) ============ -->
 <div id="quickTaskScreen" style="display:none;">
   <div style="max-width:480px;margin:0 auto;padding:28px 18px 60px;">
-    <h1 style="font-family:'Comfortaa',sans-serif;color:var(--brass);margin:0 0 4px;font-size:32px;">Docket</h1>
+    <h1 style="font-family:'Comfortaa',sans-serif;color:var(--brass);margin:0 0 4px;font-size:32px;">Dockit</h1>
     <p style="color:var(--slate);margin:0 0 24px;font-size:14px;">Quick add task</p>
 
     <div id="quickTaskForm">
@@ -192,7 +192,7 @@
 
     <div id="quickTaskSuccess" style="display:none;text-align:center;padding:50px 0;">
       <h2 style="font-family:'Comfortaa',sans-serif;">Added!</h2>
-      <p style="color:var(--slate);margin-bottom:24px;">Your task has been saved to Docket.</p>
+      <p style="color:var(--slate);margin-bottom:24px;">Your task has been saved to Dockit.</p>
       <button class="btn" onclick="resetQuickTaskForm()" style="width:100%;justify-content:center;padding:16px;font-size:16px;">Add another</button>
     </div>
   </div>
@@ -307,7 +307,7 @@
 <!-- ============ LOGIN SCREEN ============ -->
 <div id="loginScreen">
   <div class="login-card">
-    <h1>Docket</h1>
+    <h1>Dockit</h1>
     <p>Sign in with the login your admin created for you. Welcome back!</p>
     <div class="login-error" id="loginError"></div>
     <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"></div>
@@ -325,7 +325,7 @@
 <!-- ============ SET PASSWORD SCREEN (welcome link / reset link) ============ -->
 <div id="setPasswordScreen" style="display:none;">
   <div class="login-card">
-    <h1>Docket</h1>
+    <h1>Dockit</h1>
     <p id="setPasswordIntro">Set your password to continue.</p>
     <div class="login-error" id="setPasswordError"></div>
     <div id="setPasswordFormArea">
@@ -367,7 +367,7 @@
 <!-- ============ APP SHELL ============ -->
 <div id="app">
   <div class="sidebar">
-    <div class="sidebar-logo">Docket</div>
+    <div class="sidebar-logo">Dockit</div>
     <div class="nav-item active" data-view="contacts" onclick="switchView('contacts')">Contacts</div>
     <div class="nav-item" data-view="organisations" onclick="switchView('organisations')">Organisations</div>
     <div class="nav-item" data-view="pipeline" onclick="switchView('pipeline')">Pipeline</div>
@@ -411,7 +411,7 @@
         <div class="view-header">
           <div>
             <p class="view-title">Organisations</p>
-            <p class="view-sub">Every organisation in Docket — contacts, tasks, and onboarding status all in one place.</p>
+            <p class="view-sub">Every organisation in Dockit — contacts, tasks, and onboarding status all in one place.</p>
           </div>
           <button class="btn small" onclick="openOrganisationDetail(null)">+ New organisation</button>
         </div>
@@ -676,7 +676,7 @@
             </div>
             <div class="script-box" style="flex:1;min-width:260px;margin:0;border-left-color:var(--stamp-red);text-align:center;padding:24px 20px;">
               <p style="font-size:16px;font-weight:700;color:var(--stamp-red);margin:0 0 10px;">If they say no</p>
-              <p style="font-size:13.5px;color:var(--ink-soft);margin:0;">Note why on their Recruitment tab. Docket will flag it clearly if anyone tries to approach that same company again later.</p>
+              <p style="font-size:13.5px;color:var(--ink-soft);margin:0;">Note why on their Recruitment tab. Dockit will flag it clearly if anyone tries to approach that same company again later.</p>
             </div>
           </div>
         </div>
@@ -860,7 +860,7 @@
 
         <div id="spSubtab-recruitment" style="display:none;">
           <div id="spQuickAddArea" style="display:none;">
-            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:0;">Add the basics to get this prospect on Docket — you can fill in everything else later, on the other tabs.</p>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:0;">Add the basics to get this prospect on Dockit — you can fill in everything else later, on the other tabs.</p>
             <div class="field"><label>Name of service provider *</label><input id="spQuickName" oninput="checkSPQuickDuplicateContact()"></div>
             <div id="spQuickDuplicateWarning" style="display:none;"></div>
             <div class="field"><label>Phone number *</label><input id="spQuickPhone"></div>
@@ -884,7 +884,7 @@
           <p style="margin-top:24px;"><span onclick="toggleSPOnboardingLinkSection()" style="cursor:pointer;color:var(--brass);font-weight:600;font-size:13px;" id="spOnboardingLinkToggle">Show onboarding link ▾</span></p>
           <div class="onboard-section" id="spOnboardingLinkSection" style="display:none;">
             <div class="onboard-section-head"><span class="onboard-section-title">Onboarding link</span></div>
-            <p style="font-size:13px;color:var(--slate);margin-top:0;">Send this to the provider so they can fill in their own company details, team, waste transfer station, and documents — no login needed. It updates Docket directly once they submit.</p>
+            <p style="font-size:13px;color:var(--slate);margin-top:0;">Send this to the provider so they can fill in their own company details, team, waste transfer station, and documents — no login needed. It updates Dockit directly once they submit.</p>
             <div id="spOnboardingLinkArea"></div>
           </div>
 
@@ -963,7 +963,7 @@
       <div id="usageSection" style="display:none;margin-top:36px;">
         <div class="onboard-section">
           <div class="onboard-section-head"><span class="onboard-section-title">Usage</span></div>
-          <p style="font-size:13px;color:var(--slate);margin-top:0;">Sorted by most recent login — anyone who hasn't been using Docket naturally sinks to the bottom.</p>
+          <p style="font-size:13px;color:var(--slate);margin-top:0;">Sorted by most recent login — anyone who hasn't been using Dockit naturally sinks to the bottom.</p>
           <div id="usageSummaryRow" style="display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap;"></div>
           <div id="usageListContainer"></div>
         </div>
@@ -1524,7 +1524,7 @@ function showToast(msg, isError){
 }
 
 // Best-effort sync/tracking to Klaviyo -- never blocks the actual
-// Docket action if it fails, and won't do anything at all until an
+// Dockit action if it fails, and won't do anything at all until an
 // email is actually available for the given contact.
 async function klaviyoCall(payload){
   if(!payload.email) return; // Klaviyo profiles are identified by email -- nothing to do without one
@@ -1567,8 +1567,8 @@ async function requestPasswordReset(){
     });
   }catch(e){ /* fall through to the same message either way, see below */ }
   // Always show the same message, whether or not that email matched an
-  // account — so this can't be used to check who has a Docket login.
-  msgEl.textContent = 'If that email has a Docket account, a reset link is on its way.';
+  // account — so this can't be used to check who has a Dockit login.
+  msgEl.textContent = 'If that email has a Dockit account, a reset link is on its way.';
   msgEl.style.display = 'block';
   btn.disabled = false; btn.textContent = 'Send reset link';
 }
@@ -1824,7 +1824,7 @@ async function saveQuickTask(){
     if(match){
       organisationId = match.id;
     }else{
-      if(!confirm('"'+orgName+'" isn\'t in Docket yet — add it as a new organisation?')) return;
+      if(!confirm('"'+orgName+'" isn\'t in Dockit yet — add it as a new organisation?')) return;
       const { data: newOrg, error: newOrgErr } = await sb.from('organisations').insert({ name: orgName, onboarding_status: 'onboarding' }).select().single();
       if(newOrgErr){ errEl.textContent = 'Could not add organisation: ' + newOrgErr.message; errEl.style.display = 'block'; return; }
       await loadOrganisations();
@@ -1912,7 +1912,7 @@ async function checkExistingSession(){
 checkExistingSession();
 
 // If someone pastes a supplier onboarding link into a tab that already has
-// Docket open, the page won't necessarily do a full reload just because the
+// Dockit open, the page won't necessarily do a full reload just because the
 // bit after the # changed — so also catch that case directly.
 window.addEventListener('hashchange', function(){
   const onboardMatch = window.location.hash.match(/#supplier-onboard=([a-z0-9-]+)/i);
@@ -2954,7 +2954,7 @@ async function renderUsageDashboard(profiles){
     html += '</tr>';
   });
   html += '</tbody></table>';
-  html += '<p style="font-size:11.5px;color:var(--slate);margin-top:10px;">"Time in app" is an estimate based on activity roughly every 2 minutes while Docket stays open — a gap of more than 10 minutes is treated as ending that sitting.</p>';
+  html += '<p style="font-size:11.5px;color:var(--slate);margin-top:10px;">"Time in app" is an estimate based on activity roughly every 2 minutes while Dockit stays open — a gap of more than 10 minutes is treated as ending that sitting.</p>';
   listEl.innerHTML = html;
 }
 
@@ -2980,7 +2980,7 @@ function openNewTeamMemberModal(){
 }
 
 async function notifyAllUsersToResetPassword(){
-  if(!confirm('Email everyone with a Docket login, telling them they\'ll need to set a new password next time they sign in? This also forces the reset — nobody will be able to use Docket normally until they do.')) return;
+  if(!confirm('Email everyone with a Dockit login, telling them they\'ll need to set a new password next time they sign in? This also forces the reset — nobody will be able to use Dockit normally until they do.')) return;
   const btn = document.getElementById('notifyResetPasswordBtn');
   btn.disabled = true; btn.textContent = 'Sending…';
   try{
@@ -6720,7 +6720,7 @@ function buildSPWappSetupPdfString(sp){
 
   y += 6;
   newPageIfNeeded(16);
-  text('Generated automatically by Docket when this provider was entered onto Loop.', marginX, y, 8, '0.6 0.6 0.6', 'F1');
+  text('Generated automatically by Dockit when this provider was entered onto Loop.', marginX, y, 8, '0.6 0.6 0.6', 'F1');
 
   flushPage();
 
@@ -6877,7 +6877,7 @@ function buildOnboardingSummaryPdfString(org){
 
   y += 6;
   newPageIfNeeded(16);
-  text('Generated automatically by Docket when this customer was marked as live.', marginX, y, 8, '0.6 0.6 0.6', 'F1');
+  text('Generated automatically by Dockit when this customer was marked as live.', marginX, y, 8, '0.6 0.6 0.6', 'F1');
 
   flushPage();
 
@@ -6972,24 +6972,24 @@ function round2(n){ return Math.round((Number(n)||0) * 100) / 100; }
 
 async function loadData(){
   try{
-    const c = await window.storage.get('docket:contacts', false);
+    const c = await window.storage.get('dockit:contacts', false);
     contacts = c ? JSON.parse(c.value) : [];
   }catch(e){ contacts = []; }
   try{
-    const d = await window.storage.get('docket:deals', false);
+    const d = await window.storage.get('dockit:deals', false);
     deals = d ? JSON.parse(d.value) : [];
   }catch(e){ deals = []; }
   try{
-    const q = await window.storage.get('docket:quotes', false);
+    const q = await window.storage.get('dockit:quotes', false);
     quotes = q ? JSON.parse(q.value) : [];
   }catch(e){ quotes = []; }
   try{
-    const o = await window.storage.get('docket:organisations', false);
+    const o = await window.storage.get('dockit:organisations', false);
     organisations = o ? JSON.parse(o.value) : [];
   }catch(e){ organisations = []; }
   let existingAssetsRaw = null;
   try{
-    const a = await window.storage.get('docket:assets', false);
+    const a = await window.storage.get('dockit:assets', false);
     existingAssetsRaw = a ? a.value : null;
   }catch(e){
     existingAssetsRaw = null;
@@ -7048,11 +7048,11 @@ let askAiNudgeTimer = null;
 let askAiNudgeHideTimer = null;
 let askAiNudgeIndex = 0;
 const ASK_AI_NUDGE_MESSAGES = [
-  "Stuck on something? I'm an AI helper — ask me anything about using Docket, any time.",
-  "Not sure how to do something in Docket? Just ask — I'm here to help.",
+  "Stuck on something? I'm an AI helper — ask me anything about using Dockit, any time.",
+  "Not sure how to do something in Dockit? Just ask — I'm here to help.",
   "Quick tip: try asking me things like \"how do I add a new service provider?\"",
   "Forgotten how something works? Tap here and just ask me directly.",
-  "New to a part of Docket? I can walk you through it — just ask."
+  "New to a part of Dockit? I can walk you through it — just ask."
 ];
 
 function startAskAiNudgeTimer(){
@@ -7082,7 +7082,7 @@ function toggleHelpChat(){
   document.getElementById('askAiNudge').style.display = 'none';
   if(isHidden && !helpChatOpened){
     helpChatOpened = true;
-    appendHelpChatMessage('assistant', "Hi! Ask me how to do anything in Docket — like \"how do I add a new service provider\" or \"how do I mark a customer as live\".");
+    appendHelpChatMessage('assistant', "Hi! Ask me how to do anything in Dockit — like \"how do I add a new service provider\" or \"how do I mark a customer as live\".");
   }
   if(isHidden) document.getElementById('helpChatInput').focus();
 }
@@ -7117,7 +7117,7 @@ async function sendHelpChatMessage(){
 
   try{
     const { data: { session } } = await sb.auth.getSession();
-    const res = await fetch(SP_FUNCTIONS_URL + 'docket-help-chat', {
+    const res = await fetch(SP_FUNCTIONS_URL + 'dockit-help-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
       body: JSON.stringify({ messages: helpChatHistory })
@@ -7768,7 +7768,7 @@ function quoteRefLabel(q){
   <div style="background:linear-gradient(135deg, var(--brass) 0%, #f0a51e 100%);padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-start;">
     <div>
       <div style="font-family:'Comfortaa',sans-serif;font-weight:700;color:#1B1B1B;font-size:14.5px;">✨ Ask Ai</div>
-      <div style="font-size:11px;color:#3a2f0f;margin-top:2px;">AI-powered help — ask how to do anything in Docket</div>
+      <div style="font-size:11px;color:#3a2f0f;margin-top:2px;">AI-powered help — ask how to do anything in Dockit</div>
     </div>
     <span onclick="toggleHelpChat()" style="cursor:pointer;color:#1B1B1B;font-size:18px;line-height:1;">✕</span>
   </div>
