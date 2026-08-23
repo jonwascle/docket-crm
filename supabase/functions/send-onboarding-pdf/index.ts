@@ -1,26 +1,15 @@
 // This runs on Supabase's servers, never in the browser.
 //
-// It's what lets a service provider fill in their own details through a
-// link — with NO Docket login — without opening up direct anonymous
-// writes to the database. The link just carries a token; this function
-// checks the token is real, then does the actual writing itself using the
-// privileged service role key.
+// Called by Docket right after an organisation is marked as a live
+// customer (see generateAndSendOnboardingPdf in index.html.html). Emails
+// the onboarding summary PDF to whichever addresses are set up under
+// Team -> Notification emails — the same list used for the service
+// provider "Entered on Wapp" notification (send-sp-wapp-notification).
 //
-// Two things it can do (sent as `action` in the POST body):
-//   'get'    - given a token, return the provider's name plus whatever
-//              they've already filled in (so the form can show existing
-//              answers if they're finishing this later, or updating it)
-//   'submit' - given a token and the filled-in form, save everything:
-//              company/contact details, team members, waste transfer
-//              stations, and any uploaded documents.
-//
-// Sends two kinds of emails via SMTP2GO, using different senders:
-//   TASK_EMAIL_FROM  - the internal notification to whichever staff
-//                       member owns this recruitment (mentions Docket,
-//                       since staff know what that is)
-//   SP_EMAIL_FROM    - the supplier-facing "thanks, here's your link"
-//                       confirmation (a no-reply address, and never
-//                       mentions Docket, since suppliers don't know it)
+// Needs the same two secrets as the other internal notification emails
+// (Supabase -> Edge Functions -> send-onboarding-pdf -> Settings -> Secrets):
+//   SMTP2GO_API_KEY
+//   TASK_EMAIL_FROM
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -39,217 +28,85 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const serviceRoleKey = Deno.env.get('SB_SECRET_KEY');
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const body = await req.json().catch(() => ({}));
-    const { action, token } = body;
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace('Bearer ', '').trim();
     if (!token) {
-      return json({ error: 'Missing token.' }, 400);
+      return json({ error: 'Missing authorization header.' }, 401);
+    }
+    const { data: { user }, error: userErr } = await adminClient.auth.getUser(token);
+    if (userErr || !user) {
+      return json({ error: 'Not signed in.' }, 401);
     }
 
-    const { data: link, error: linkErr } = await adminClient
-      .from('sp_onboarding_links').select('*').eq('token', token).single();
-    if (linkErr || !link) {
-      return json({ error: 'This link is not valid. Please ask Wascle for a new one.' }, 404);
+    const body = await req.json().catch(() => ({}));
+    const { orgName, pdfBase64 } = body;
+    if (!pdfBase64) {
+      return json({ error: 'Missing PDF content.' }, 400);
     }
 
-    const spId = link.service_provider_id;
-
-    if (action === 'get') {
-      const { data: sp } = await adminClient.from('service_providers').select('*').eq('id', spId).single();
-      const { data: team } = await adminClient.from('service_provider_team_members').select('*').eq('service_provider_id', spId);
-      const { data: stations } = await adminClient.from('service_provider_waste_stations').select('*').eq('service_provider_id', spId);
-      const { data: documents } = await adminClient.from('service_provider_documents').select('id, document_name, document_type, expiry_date, original_file_name').eq('service_provider_id', spId);
-      const { data: postcodes } = await adminClient.from('service_provider_postcodes').select('postcode_area').eq('service_provider_id', spId);
-      if (!sp) {
-        return json({ error: 'Could not find this service provider.' }, 404);
-      }
-      return json({
-        success: true, provider: sp, team: team || [], stations: stations || [], documents: documents || [],
-        postcodeAreas: (postcodes || []).map(p => p.postcode_area)
-      }, 200);
+    const { data: recipients, error: recipientsErr } = await adminClient
+      .from('notification_emails').select('email, category');
+    if (recipientsErr) {
+      return json({ error: recipientsErr.message }, 500);
+    }
+    const toAddresses = (recipients || []).map(r => r.email);
+    if (toAddresses.length === 0) {
+      return json({ success: true, skipped: true, reason: 'No notification email addresses configured yet.' }, 200);
     }
 
-    if (action === 'submit') {
-      const { company, teamMembers, wasteStations, documents, postcodeAreas, isFinal } = body;
+    const safeName = (orgName || 'customer').replace(/[^a-z0-9]+/gi, '-');
+    const html = buildOnboardingNotificationEmailHtml(orgName);
 
-      if (company) {
-        const allowed = ['name', 'address_line1', 'address_line2', 'city', 'county', 'postcode',
-          'waste_carriers_licence_number', 'email', 'phone', 'vat_registered', 'vat_number',
-          'utr_number', 'business_type', 'company_number', 'sic_code',
-          'invoice_recipient_name', 'invoice_recipient_email',
-          'bank_account_name', 'bank_account_number', 'bank_sort_code'];
-        const update = {};
-        allowed.forEach(k => { if (company[k] !== undefined) update[k] = company[k]; });
-        if (Object.keys(update).length > 0) {
-          const { error } = await adminClient.from('service_providers').update(update).eq('id', spId);
-          if (error) return json({ error: 'Could not save company details: ' + error.message }, 400);
-        }
-      }
+    const result = await sendEmail(toAddresses, `New customer live: ${orgName || 'Unnamed'}`, html, [
+      { filename: `${safeName}-onboarding-summary.pdf`, content: pdfBase64 }
+    ]);
 
-      if (Array.isArray(postcodeAreas)) {
-        await adminClient.from('service_provider_postcodes').delete().eq('service_provider_id', spId);
-        const rows = postcodeAreas.filter(pc => pc && pc.trim()).map(pc => ({
-          service_provider_id: spId, postcode_area: pc.trim().toUpperCase()
-        }));
-        if (rows.length > 0) {
-          await adminClient.from('service_provider_postcodes').insert(rows);
-        }
-      }
-
-      // Team members and waste stations: the form the supplier sees is
-      // always pre-filled with their current full list, so whatever they
-      // submit now IS their complete, current list — replace outright
-      // rather than appending, so re-submitting never creates duplicates.
-      if (Array.isArray(teamMembers)) {
-        await adminClient.from('service_provider_team_members').delete().eq('service_provider_id', spId);
-        const rows = teamMembers.filter(m => m.name).map(m => ({
-          service_provider_id: spId, name: m.name, email: m.email || null, phone: m.phone || null
-        }));
-        if (rows.length > 0) {
-          await adminClient.from('service_provider_team_members').insert(rows);
-        }
-      }
-
-      if (Array.isArray(wasteStations)) {
-        await adminClient.from('service_provider_waste_stations').delete().eq('service_provider_id', spId);
-        const rows = wasteStations.filter(w => w.station_name).map(w => ({
-          service_provider_id: spId, station_name: w.station_name, licence_number: w.licence_number || null,
-          address_line1: w.address_line1 || null, address_line2: w.address_line2 || null,
-          city: w.city || null, county: w.county || null, postcode: w.postcode || null
-        }));
-        if (rows.length > 0) {
-          await adminClient.from('service_provider_waste_stations').insert(rows);
-        }
-      }
-
-      // Documents: the three standard types (insurance, licence, etc.) each
-      // only ever have one entry per provider, so re-submitting updates
-      // that same entry rather than creating a second one. Anything else
-      // ("other" documents) doesn't have an obvious match to update, so
-      // those are simply added each time.
-      if (Array.isArray(documents)) {
-        for (const d of documents) {
-          if (!d.name) continue;
-
-          let existing = null;
-          if (d.documentType) {
-            const { data: existingDoc } = await adminClient
-              .from('service_provider_documents').select('id, file_path')
-              .eq('service_provider_id', spId).eq('document_type', d.documentType).maybeSingle();
-            existing = existingDoc;
-          }
-
-          if (d.textValue) {
-            if (existing) {
-              await adminClient.from('service_provider_documents').update({
-                document_name: d.name, text_value: d.textValue, expiry_date: d.expiryDate || null
-              }).eq('id', existing.id);
-            } else {
-              await adminClient.from('service_provider_documents').insert({
-                service_provider_id: spId, document_name: d.name, text_value: d.textValue,
-                expiry_date: d.expiryDate || null, document_type: d.documentType || null
-              });
-            }
-            continue;
-          }
-
-          if (!d.fileBase64 || !d.fileName) continue;
-          try {
-            const bytes = base64ToBytes(d.fileBase64);
-            const path = spId + '/' + Date.now() + '-' + d.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-            const { error: uploadErr } = await adminClient.storage
-              .from('service-provider-documents')
-              .upload(path, bytes, { contentType: d.mimeType || 'application/octet-stream' });
-            if (!uploadErr) {
-              if (existing) {
-                if (existing.file_path) {
-                  await adminClient.storage.from('service-provider-documents').remove([existing.file_path]);
-                }
-                await adminClient.from('service_provider_documents').update({
-                  document_name: d.name, file_path: path, original_file_name: d.fileName,
-                  expiry_date: d.expiryDate || null
-                }).eq('id', existing.id);
-              } else {
-                await adminClient.from('service_provider_documents').insert({
-                  service_provider_id: spId, document_name: d.name, file_path: path,
-                  original_file_name: d.fileName, expiry_date: d.expiryDate || null,
-                  document_type: d.documentType || null
-                });
-              }
-            }
-          } catch (e) {
-            // Skip a document that fails to upload rather than fail the whole submission.
-          }
-        }
-      }
-
-      await adminClient.from('sp_onboarding_links').update({ last_submitted_at: new Date().toISOString() }).eq('id', link.id);
-
-      // Notify whichever staff member generated this link, every time the
-      // provider submits or updates the form — partial saves included.
-      // Wrapped in its own try/catch: a problem sending this notification
-      // must never cause the actual submission (already saved above) to
-      // come back as a failure to the supplier.
-      try {
-        if (link.created_by) {
-          const { data: staffProfile } = await adminClient.from('profiles').select('email, name').eq('id', link.created_by).maybeSingle();
-          if (staffProfile && staffProfile.email) {
-            const spName = (company && company.name) || 'A service provider';
-            const staffHtml = buildStaffNotificationEmailHtml(staffProfile.name, spName, isFinal, spId);
-            await sendEmail([staffProfile.email], spName + ' has updated their onboarding form', staffHtml, []);
-          }
-        }
-      } catch (notifyErr) {
-        console.error('Staff notification email failed:', notifyErr);
-      }
-
-      try {
-        if (!isFinal) {
-          const spEmail = (company && company.email) || null;
-          const spName = (company && company.name) || null;
-          if (spEmail) {
-            // Rebuild the same public link the supplier used, from this
-            // request's origin (falls back to the known production URL).
-            const origin = req.headers.get('origin') || 'https://docket-wascle.vercel.app';
-            const continueLink = origin + '/#supplier-onboard=' + token;
-            const html = buildFollowUpEmailHtml(spName, continueLink);
-            await sendEmail([spEmail], 'Thanks for the update — Wascle onboarding', html, [], 'SP_EMAIL_FROM');
-          }
-        }
-      } catch (followUpErr) {
-        console.error('Supplier follow-up email failed:', followUpErr);
-      }
-
-      return json({ success: true }, 200);
+    if (result.error) {
+      return json({ error: result.error }, 400);
     }
-
-    return json({ error: 'Unknown action.' }, 400);
+    return json({ success: true }, 200);
   } catch (e) {
     return json({ error: e.message || 'Unknown error.' }, 500);
   }
 });
 
-function base64ToBytes(b64: string) {
-  const binStr = atob(b64);
-  const bytes = new Uint8Array(binStr.length);
-  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-  return bytes;
+function buildOnboardingNotificationEmailHtml(orgName: string) {
+  const safeOrgName = escapeHtmlServer(orgName || 'A new customer');
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+</head>
+<body style="margin:0;padding:0;">
+  <div style="font-family: Arial, sans-serif; background-color: #F7F5F0; padding: 32px 16px;">
+    <div style="max-width: 560px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; border: 1px solid #E5E1D8; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+      <div style="background-color: #FFFFFF; padding: 26px 32px; border-bottom: 1px solid #F0EBDD;">
+        <img src="data:image/jpeg;base64,${LOGO_JPEG_BASE64}" alt="Wascle" width="160" style="display:block;">
+      </div>
+      <div style="padding: 36px 32px 8px; font-family: Arial, sans-serif; font-size: 14.5px; line-height: 1.65; color: #1B1B1B;">
+        <p style="margin: 0 0 16px;">Hi,</p>
+        <div style="border-left: 3px solid #F5B429; background-color: #FDF6E7; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 0 0 20px;">
+          <p style="margin: 0;"><b>New customer marked as live.</b></p>
+        </div>
+        <p style="margin: 0 0 16px;"><b>${safeOrgName}</b> has just been marked as a live customer in Docket. Their full onboarding summary is attached — company details, waste bags, smart skip, and property clearance setup.</p>
+        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Docket.</p>
+      </div>
+      <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
 }
 
-function json(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
-}
-
-async function sendEmail(to: string[], subject: string, html: string, attachments: { filename: string, content: string }[], fromSecret: string = 'TASK_EMAIL_FROM') {
+async function sendEmail(to: string[], subject: string, html: string, attachments: { filename: string, content: string }[]) {
   const apiKey = Deno.env.get('SMTP2GO_API_KEY');
-  const fromAddress = Deno.env.get(fromSecret);
+  const fromAddress = Deno.env.get('TASK_EMAIL_FROM');
   if (!apiKey || !fromAddress) {
-    return { error: `Email service is not configured yet (missing SMTP2GO_API_KEY or ${fromSecret}).` };
+    return { error: 'Email service is not configured yet (missing SMTP2GO_API_KEY or TASK_EMAIL_FROM).' };
   }
   const res = await fetch('https://api.smtp2go.com/v3/email/send', {
     method: 'POST',
@@ -278,74 +135,9 @@ function escapeHtmlServer(str: string) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function buildStaffNotificationEmailHtml(staffName: string, spName: string, isFinal: boolean, spId: string) {
-  const greetingName = escapeHtmlServer((staffName || '').split(' ')[0] || 'there');
-  const safeSpName = escapeHtmlServer(spName);
-  const docketLink = 'https://docket-wascle.vercel.app/#view=serviceproviders&sp=' + spId + '&subtab=recruitment';
-  const statusLine = isFinal
-    ? `<b>${safeSpName}</b> has just finished submitting their onboarding form.`
-    : `<b>${safeSpName}</b> has just saved some progress on their onboarding form — they may still be filling in the rest.`;
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-</head>
-<body style="margin:0;padding:0;">
-  <div style="font-family: Arial, sans-serif; background-color: #F7F5F0; padding: 32px 16px;">
-    <div style="max-width: 560px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; border: 1px solid #E5E1D8; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-      <div style="background: linear-gradient(135deg, #F5B429 0%, #f0a51e 100%); padding: 26px 32px;">
-        <img src="data:image/jpeg;base64,${LOGO_JPEG_BASE64}" alt="Wascle" width="160" style="display:block;">
-      </div>
-      <div style="padding: 36px 32px 8px; font-family: Arial, sans-serif; font-size: 14.5px; line-height: 1.65; color: #1B1B1B;">
-        <p style="margin: 0 0 16px;">Hi ${greetingName},</p>
-        <div style="border-left: 3px solid #F5B429; background-color: #FDF6E7; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 0 0 20px;">
-          <p style="margin: 0;">${statusLine}</p>
-        </div>
-        <p style="margin: 0 0 24px;text-align:center;">
-          <a href="${docketLink}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">View in Docket →</a>
-        </p>
-        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Docket.</p>
-      </div>
-      <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
-    </div>
-  </div>
-</body>
-</html>
-  `;
-}
-
-function buildFollowUpEmailHtml(spName: string, continueLink: string) {
-  const greetingName = escapeHtmlServer(spName || 'there');
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-</head>
-<body style="margin:0;padding:0;">
-  <div style="font-family: Arial, sans-serif; background-color: #F7F5F0; padding: 32px 16px;">
-    <div style="max-width: 560px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; border: 1px solid #E5E1D8; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-      <div style="background: linear-gradient(135deg, #F5B429 0%, #f0a51e 100%); padding: 26px 32px;">
-        <img src="data:image/jpeg;base64,${LOGO_JPEG_BASE64}" alt="Wascle" width="160" style="display:block;">
-      </div>
-      <div style="padding: 36px 32px 8px; font-family: Arial, sans-serif; font-size: 14.5px; line-height: 1.65; color: #1B1B1B;">
-        <p style="margin: 0 0 16px;">Hi ${greetingName},</p>
-        <div style="border-left: 3px solid #F5B429; background-color: #FDF6E7; border-radius: 0 6px 6px 0; padding: 14px 18px; margin: 0 0 20px;">
-          <p style="margin: 0;">Thank you for sending over some information — we've saved it safely on our system.</p>
-        </div>
-        <p style="margin: 0 0 16px;">Whenever you're ready to complete the rest, just use the link below to pick up exactly where you left off — nothing you've already entered will need to be redone.</p>
-        <p style="margin: 0 0 24px;text-align:center;">
-          <a href="${escapeHtmlServer(continueLink)}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">Continue onboarding form →</a>
-        </p>
-        <p style="margin: 0 0 28px;">If you have any questions in the meantime, please don't hesitate to get in touch — we're always happy to help.</p>
-        <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;">Kind regards,<br><b style="color:#B8860B;">The Wascle Team</b></p>
-      </div>
-      <div style="height: 4px; background: linear-gradient(90deg, #F5B429 0%, #f0a51e 100%);"></div>
-      <div style="background-color: #F7F5F0; padding: 16px 32px; font-family: Arial, sans-serif; font-size: 12px; color: #7A7568;">
-        <b style="color:#1B1B1B;">Wascle</b> &middot; <a href="https://wascle.co.uk" style="color: #B8860B;font-weight:600;">wascle.co.uk</a>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
-  `;
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 }
