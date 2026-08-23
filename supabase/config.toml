@@ -1,0 +1,47 @@
+# Reference config reconstructed from the live deployed project
+# (sjqjqthjvohebnjtaqaz) — verify_jwt values below match what's actually
+# configured in Supabase for each function today.
+
+project_id = "sjqjqthjvohebnjtaqaz"
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.sp-onboarding-submit]
+verify_jwt = false
+
+[functions.send-onboarding-pdf]
+verify_jwt = false
+
+[functions.send-task-reminders]
+verify_jwt = false
+
+[functions.send-sp-recruitment-email]
+verify_jwt = false
+
+[functions.send-sp-document-expiry-reminders]
+verify_jwt = false
+
+[functions.docket-help-chat]
+verify_jwt = false
+
+[functions.send-sp-wapp-notification]
+verify_jwt = true
+
+[functions.password-reset]
+verify_jwt = false
+
+[functions.sync-sp-to-jobmanagement]
+verify_jwt = true
+
+[functions.feature-request-notify]
+verify_jwt = false
+
+[functions.transcribe-feature-request-video]
+verify_jwt = false
+
+[functions.cleanup-release-videos]
+verify_jwt = false
+
+[functions.klaviyo-sync]
+verify_jwt = false
