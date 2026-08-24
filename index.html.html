@@ -1165,11 +1165,14 @@
       <div class="field"><label>Postcode</label><input id="aPostcode"></div>
       <div class="field"><label>Sited date</label><input id="aSitedDate" type="date"></div>
     </div>
-    <div class="field" id="skipCustomerNameField"><label>Customer name</label><input id="aCustomerName"></div>
+    <div class="field" id="skipCustomerNameField"><label>Customer name</label><input id="aCustomerName" list="assetCustomerOrgOptions" autocomplete="off"></div>
+    <datalist id="assetCustomerOrgOptions"></datalist>
     <div class="field-row">
-      <div class="field"><label>Housing association</label><input id="aHousingAssociation"></div>
+      <div class="field"><label>Housing association</label><input id="aHousingAssociation" list="assetHousingAssociationOrgOptions" autocomplete="off"></div>
+      <datalist id="assetHousingAssociationOrgOptions"></datalist>
       <div class="field" id="aBranchInvoiceField"><label>Branch invoice no.</label><input id="aBranchInvoiceNo"></div>
     </div>
+    <p style="font-size:12px;color:var(--slate);margin-top:-10px;">Pick a name from the list where possible — this keeps Dockit's customer/housing association records matched up with the real companies instead of one-off spellings.</p>
     <div class="field" id="aInvoiceContactField"><label>Invoice contact</label><input id="aInvoiceContact"></div>
 
     <div id="scpOnlySection">
@@ -3169,7 +3172,8 @@ function assetRowToCamel(row){
     masterPin: row.master_pin, branch: row.branch, branchContact: row.branch_contact, notes: row.notes,
     latitude: row.latitude, longitude: row.longitude, retired: row.retired||false,
     onOrder: row.on_order||false, manufacturer: row.manufacturer||null,
-    reservedForName: row.reserved_for_name||null, reservedForAddress: row.reserved_for_address||null, reservedConfirmed: row.reserved_confirmed||false
+    reservedForName: row.reserved_for_name||null, reservedForAddress: row.reserved_for_address||null, reservedConfirmed: row.reserved_confirmed||false,
+    customerOrgId: row.customer_org_id||null, housingAssociationOrgId: row.housing_association_org_id||null
   };
 }
 function camelToAssetRow(a){
@@ -3177,6 +3181,7 @@ function camelToAssetRow(a){
     asset_type: a.assetType, asset_number: a.assetNumber, batch: a.batch||null, information: a.information||null,
     address: a.address||null, postcode: a.postcode||null, sited_date: a.sitedDate||null, customer_name: a.customerName||null,
     housing_association: a.housingAssociation||null, branch_invoice_no: a.branchInvoiceNo||null, invoice_contact: a.invoiceContact||null,
+    customer_org_id: a.customerOrgId||null, housing_association_org_id: a.housingAssociationOrgId||null,
     container_type: a.containerType||null, container_volume: a.containerVolume||null, waste_stream: a.wasteStream||null, paint_drum: a.paintDrum||null,
     padlock_number: a.padlockNumber||null, sensor_serial: a.sensorSerial||null, fill_sensor: a.fillSensor||null, qr: a.qr||null, signage: a.signage||null,
     subbie: a.subbie||null, grouped_invoicing: a.groupedInvoicing||null, weekly_rental: a.weeklyRental||null,
@@ -3184,6 +3189,43 @@ function camelToAssetRow(a){
     retired: a.retired||false, on_order: a.onOrder||false, manufacturer: a.manufacturer||null,
     reserved_for_name: a.reservedForName||null, reserved_for_address: a.reservedForAddress||null, reserved_confirmed: a.reservedConfirmed||false
   };
+}
+
+/* Matches free-typed customer/housing-association text against the resolved
+   organisations list (case-insensitive) so correctly-named entries link up to
+   a real organisation without forcing a rigid dropdown -- the raw text still
+   has to stay editable since Lockit's sync reads it directly. Offers to create
+   a new organisation for a genuinely new name, same as the quick-task flow.
+   Declining just leaves the org id unresolved rather than blocking the save --
+   unlike a task, the asset's raw text is still fully usable on its own. */
+async function resolveOrCreateOrganisationId(name, { excludeMerchants } = {}){
+  if(!name) return null;
+  const needle = name.trim().toLowerCase();
+  if(!needle) return null;
+  const match = organisations.find(o=>o.name.toLowerCase()===needle && (!excludeMerchants || !o.is_builders_merchant));
+  if(match) return match.id;
+  if(excludeMerchants && organisations.some(o=>o.name.toLowerCase()===needle)) return null;
+  if(!confirm('"'+name+'" isn\'t in Dockit yet — add it as a new organisation?')) return null;
+  const { data: newOrg, error } = await sb.from('organisations').insert({ name: name.trim(), onboarding_status: 'onboarding' }).select().single();
+  if(error){ showToast('Could not add organisation "'+name+'": ' + error.message, true); return null; }
+  await loadOrganisations();
+  return newOrg.id;
+}
+
+function populateAssetOrgDatalists(){
+  document.getElementById('assetCustomerOrgOptions').innerHTML = organisations.slice()
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(o=>'<option value="'+escapeHtml(o.name)+'">').join('');
+  // "Non-merchant organisation" isn't the same thing as "housing association" --
+  // that set also includes standalone commercial customers (e.g. Contract
+  // Flooring) and unrelated CRM organisations (e.g. Xero). Instead, suggest
+  // only organisations already resolved as a housing association on a real
+  // asset -- a genuinely new HA can still be free-typed and will show up here
+  // from then on once it's been used once.
+  const knownHaOrgIds = new Set(assets.map(a=>a.housingAssociationOrgId).filter(Boolean));
+  document.getElementById('assetHousingAssociationOrgOptions').innerHTML = organisations.filter(o=>knownHaOrgIds.has(o.id)).slice()
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(o=>'<option value="'+escapeHtml(o.name)+'">').join('');
 }
 
 async function loadAssets(){
@@ -3566,6 +3608,7 @@ function nextAvailableAssetNumber(assetType){
 }
 
 function openAssetModal(id){
+  populateAssetOrgDatalists();
   document.getElementById('assetId').value = id || '';
   const a = id ? assets.find(x=>x.id===id) : null;
   const isNewOnOrder = !a && currentAssetSubview === 'on_order';
@@ -3607,7 +3650,6 @@ async function saveAsset(){
     if(key==='assetType') return;
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
   });
-
   if(data.reservedConfirmed && (!data.reservedForName || !data.reservedForAddress)){
     showToast('Fill in who this smart skip is for and its address before confirming.', true);
     return;
@@ -3643,6 +3685,12 @@ async function saveAsset(){
       return;
     }
   }
+
+  // Resolve/create organisations only now that every other validation has
+  // passed -- this can create a real organisation row (with a confirm
+  // prompt), so it must not run on a save that's about to be rejected.
+  data.customerOrgId = await resolveOrCreateOrganisationId(data.customerName);
+  data.housingAssociationOrgId = await resolveOrCreateOrganisationId(data.housingAssociation, { excludeMerchants: true });
 
   const row = camelToAssetRow(data);
   let error, savedId = id;

@@ -159,7 +159,14 @@ create table public.assets (
   manufacturer text,
   reserved_for_name text,
   reserved_for_address text,
-  reserved_confirmed boolean default false
+  reserved_confirmed boolean default false,
+  -- customer_name/housing_association are raw free-typed strings from the JobiT export
+  -- (a new "customer" is created per skip in JobiT, so the same real merchant/housing
+  -- association shows up under dozens of spelling variants, e.g. "JPS - LW - exeter").
+  -- These two columns resolve that fragmentation to real public.organisations rows —
+  -- same fix as applied on the Lockit side. Raw text columns are kept for display/audit.
+  customer_org_id uuid references public.organisations(id),
+  housing_association_org_id uuid references public.organisations(id)
 );
 
 -- ============================================================================
