@@ -1129,7 +1129,7 @@
     <input type="hidden" id="assetId">
     <input type="hidden" id="aAssetType" value="skip">
 
-    <div class="field"><label>Asset number</label><input id="aAssetNumber" oninput="enforceAssetNumberPrefix()"></div>
+    <div class="field"><label>Asset number</label><input id="aAssetNumber"></div>
 
     <div class="field" id="aManufacturerField" style="display:none;">
       <label>Manufacturer</label>
@@ -3148,7 +3148,10 @@ async function deleteTeamMember(){
 }
 
 /* ---------- Assets (smart skips & collection points) ---------- */
-const ASSET_TYPE_PREFIX = { skip: 'W-', scp: 'SCP-' };
+// Asset numbers are plain digits with no letter prefix -- kept in separate,
+// non-overlapping bands per type so a bare number is never ambiguous about
+// what it refers to (skips start at 100, collection points start at 9001).
+const ASSET_TYPE_NUMBER_START = { skip: 100, scp: 9001 };
 const ASSET_FIELD_IDS = {
   assetType:'aAssetType', assetNumber:'aAssetNumber', batch:'aBatch', information:'aInformation',
   address:'aAddress', postcode:'aPostcode', sitedDate:'aSitedDate', customerName:'aCustomerName',
@@ -3569,29 +3572,7 @@ function onAssetTypeChange(){
   document.getElementById('aInvoiceContactField').style.display = isScp ? 'none' : 'block';
 }
 
-function enforceAssetNumberPrefix(){
-  const type = document.getElementById('aAssetType').value;
-  const prefix = ASSET_TYPE_PREFIX[type] || '';
-  if(!prefix) return;
-  const el = document.getElementById('aAssetNumber');
-  const val = el.value;
-  if(val.toUpperCase().startsWith(prefix.toUpperCase())) return;
-  const candidates = [];
-  for(let i=1;i<prefix.length;i++){
-    candidates.push(prefix.slice(0,i));
-    candidates.push(prefix.slice(prefix.length-i));
-  }
-  candidates.sort((a,b)=>b.length-a.length);
-  let stripped = val;
-  for(const c of candidates){
-    if(val.toUpperCase().startsWith(c.toUpperCase())){ stripped = val.slice(c.length); break; }
-  }
-  el.value = prefix + stripped;
-  el.setSelectionRange(el.value.length, el.value.length);
-}
-
 function nextAvailableAssetNumber(assetType){
-  const prefix = ASSET_TYPE_PREFIX[assetType] || '';
   const extractNumber = a=>{
     const m = (a.assetNumber||'').match(/^\D*(\d+)/);
     return m ? Number(m[1]) : null;
@@ -3599,12 +3580,12 @@ function nextAvailableAssetNumber(assetType){
   const ofType = assets.filter(a=>(a.assetType||'skip')===assetType);
   const activeNumbers = new Set(ofType.filter(a=>!a.retired).map(extractNumber).filter(n=>n !== null));
 
-  // Numbering always starts at 100 -- a firm rule, not derived from
-  // whatever happens to already exist -- then finds the first gap from
-  // there (picking up retired numbers like a scrapped 124 along the way).
-  let n = 100;
+  // Numbering always starts at each type's band start -- a firm rule, not
+  // derived from whatever happens to already exist -- then finds the first
+  // gap from there (picking up retired numbers freed for reuse along the way).
+  let n = ASSET_TYPE_NUMBER_START[assetType] || 100;
   while(activeNumbers.has(n)) n++;
-  return prefix + n;
+  return String(n);
 }
 
 function openAssetModal(id){
@@ -3638,13 +3619,9 @@ async function saveAsset(){
   const id = document.getElementById('assetId').value;
   const assetType = document.getElementById('aAssetType').value;
   const assetNumber = document.getElementById('aAssetNumber').value.trim();
-  const prefix = (ASSET_TYPE_PREFIX[assetType] || '').toUpperCase();
-  if(!assetNumber || (prefix && assetNumber.toUpperCase() === prefix)){ showToast('Asset number is required.', true); return; }
-  const isExempt = assetNumber.toLowerCase() === 'lockers only';
-  if(!isExempt){
-    const duplicate = assets.some(x=>x.id!==id && !x.retired && (x.assetNumber||'').trim().toUpperCase() === assetNumber.toUpperCase());
-    if(duplicate){ showToast('An asset with number "'+assetNumber+'" already exists.', true); return; }
-  }
+  if(!assetNumber){ showToast('Asset number is required.', true); return; }
+  const duplicate = assets.some(x=>x.id!==id && !x.retired && (x.assetNumber||'').trim().toUpperCase() === assetNumber.toUpperCase());
+  if(duplicate){ showToast('An asset with number "'+assetNumber+'" already exists.', true); return; }
   const data = { assetType, retired: document.getElementById('aRetired').checked, reservedConfirmed: document.getElementById('aReservedConfirmed').checked };
   Object.keys(ASSET_FIELD_IDS).forEach(key=>{
     if(key==='assetType') return;
