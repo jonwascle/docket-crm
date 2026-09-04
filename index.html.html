@@ -402,9 +402,9 @@
         </div>
         <button class="btn small" onclick="openContactModal()">+ New contact</button>
       </div>
-      <input class="search-input" id="contactSearch" placeholder="Search by name, organisation, or email" oninput="contactsPage=1;renderContacts()">
+      <input class="search-input" id="contactSearch" placeholder="Search by name, organisation, or email" oninput="renderContacts()">
+      <div id="contactsLetterBar"></div>
       <div id="contactsContainer"></div>
-      <div id="contactsPagination"></div>
     </div>
 
     <!-- ---------- ORGANISATIONS VIEW ---------- -->
@@ -417,9 +417,9 @@
           </div>
           <button class="btn small" onclick="openOrganisationDetail(null)">+ New organisation</button>
         </div>
-        <input class="search-input" id="organisationsSearch" placeholder="Search by organisation name" oninput="organisationsPage=1;renderOrganisationsList()">
+        <input class="search-input" id="organisationsSearch" placeholder="Search by organisation name" oninput="renderOrganisationsList()">
+        <div id="organisationsLetterBar"></div>
         <div id="organisationsListContainer"></div>
-        <div id="organisationsPagination"></div>
       </div>
 
       <div id="organisationDetailMode" style="display:none;">
@@ -1417,11 +1417,9 @@ const LOGO_JPEG_BASE64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDR
 let currentUser = null;
 let currentProfile = null;
 let contacts = [];
-let contactsPage = 1;
-const CONTACTS_PAGE_SIZE = 25;
+let contactsLetter = 'ALL';
 let organisations = [];
-let organisationsPage = 1;
-const ORGANISATIONS_PAGE_SIZE = 25;
+let organisationsLetter = 'ALL';
 let organisationLinks = [];
 let featureRequests = [];
 let frScreenshotFile = null;
@@ -2046,30 +2044,34 @@ function orgName(c){
   return org ? org.name : '';
 }
 
-// Shared Prev/Next pagination bar for any list that's fully loaded into
-// memory and filtered/sorted client-side (every table in this app works
-// that way -- there's no server-side range query anywhere).
-function paginationBarHtml(page, pageSize, totalCount, gotoFn){
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const from = totalCount===0 ? 0 : (page-1)*pageSize + 1;
-  const to = Math.min(totalCount, page*pageSize);
-  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:13px;color:var(--slate);">' +
-    '<span>Showing '+from+'–'+to+' of '+totalCount+'</span>' +
-    '<div style="display:flex;gap:6px;align-items:center;">' +
-      '<button class="btn ghost small" onclick="'+gotoFn+'('+(page-1)+')" '+(page<=1?'disabled':'')+'>Prev</button>' +
-      '<span style="padding:0 8px;">Page '+page+' of '+totalPages+'</span>' +
-      '<button class="btn ghost small" onclick="'+gotoFn+'('+(page+1)+')" '+(page>=totalPages?'disabled':'')+'>Next</button>' +
-    '</div>' +
+// Shared A-Z index bar for any list that's fully loaded into memory and
+// filtered/sorted client-side (every table in this app works that way --
+// there's no server-side range query anywhere). "#" catches anything that
+// doesn't start with a letter (numbers, punctuation).
+const LETTER_BAR_LETTERS = ['ALL','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','#'];
+function nameMatchesLetter(name, letter){
+  if(letter==='ALL') return true;
+  const first = (name||'').trim().charAt(0).toUpperCase();
+  if(letter==='#') return !(first >= 'A' && first <= 'Z');
+  return first === letter;
+}
+function letterBarHtml(activeLetter, gotoFn){
+  return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;">' +
+    LETTER_BAR_LETTERS.map(l=>{
+      const isActive = l===activeLetter;
+      return '<button class="btn '+(isActive?'':'ghost')+' small" style="padding:4px 9px;min-width:28px;" onclick="'+gotoFn+'(\''+l+'\')">'+(l==='ALL'?'All':l)+'</button>';
+    }).join('') +
   '</div>';
 }
 
-function goToContactsPage(p){ contactsPage = Math.max(1, p); renderContacts(); }
+function goToContactsLetter(letter){ contactsLetter = letter; renderContacts(); }
 
 function renderContacts(){
   const q = (document.getElementById('contactSearch').value || '').toLowerCase();
   const container = document.getElementById('contactsContainer');
-  const paginationEl = document.getElementById('contactsPagination');
+  document.getElementById('contactsLetterBar').innerHTML = letterBarHtml(contactsLetter, 'goToContactsLetter');
   const filtered = contacts.filter(c=>{
+    if(!nameMatchesLetter(c.name, contactsLetter)) return false;
     if(!q) return true;
     return (c.name||'').toLowerCase().includes(q) ||
            orgName(c).toLowerCase().includes(q) ||
@@ -2078,19 +2080,15 @@ function renderContacts(){
 
   if(filtered.length===0){
     container.innerHTML = '<div class="empty-state">' +
-      (contacts.length===0 ? 'No contacts yet. Add your first one.' : 'No contacts match that search.') +
+      (contacts.length===0 ? 'No contacts yet. Add your first one.'
+        : contactsLetter!=='ALL' ? 'No contacts starting with "'+contactsLetter+'".'
+        : 'No contacts match that search.') +
       '</div>';
-    paginationEl.innerHTML = '';
     return;
   }
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / CONTACTS_PAGE_SIZE));
-  contactsPage = Math.min(Math.max(1, contactsPage), totalPages);
-  const start = (contactsPage-1)*CONTACTS_PAGE_SIZE;
-  const pageItems = filtered.slice(start, start+CONTACTS_PAGE_SIZE);
-
   let html = '<table class="qtable"><thead><tr><th>Name</th><th>Organisation</th><th>Job title</th><th>Email</th><th>Phone</th></tr></thead><tbody>';
-  pageItems.forEach(c=>{
+  filtered.forEach(c=>{
     html += '<tr onclick="openContactModal(\''+c.id+'\')" style="cursor:pointer;">';
     html += '<td><b>'+escapeHtml(c.name)+'</b></td>';
     html += '<td>'+escapeHtml(orgName(c)||'—')+'</td>';
@@ -2101,7 +2099,6 @@ function renderContacts(){
   });
   html += '</tbody></table>';
   container.innerHTML = html;
-  paginationEl.innerHTML = paginationBarHtml(contactsPage, CONTACTS_PAGE_SIZE, filtered.length, 'goToContactsPage');
 }
 
 function openContactModal(id){
@@ -2558,26 +2555,25 @@ async function deleteOrganisation(){
   showOrganisationsList();
 }
 
-function goToOrganisationsPage(p){ organisationsPage = Math.max(1, p); renderOrganisationsList(); }
+function goToOrganisationsLetter(letter){ organisationsLetter = letter; renderOrganisationsList(); }
 
 function renderOrganisationsList(){
   const q = (document.getElementById('organisationsSearch').value || '').toLowerCase();
   const container = document.getElementById('organisationsListContainer');
-  const paginationEl = document.getElementById('organisationsPagination');
-  const filtered = organisations.filter(o=>!q || o.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+  document.getElementById('organisationsLetterBar').innerHTML = letterBarHtml(organisationsLetter, 'goToOrganisationsLetter');
+  const filtered = organisations.filter(o=>{
+    if(!nameMatchesLetter(o.name, organisationsLetter)) return false;
+    return !q || o.name.toLowerCase().includes(q);
+  }).sort((a,b)=>a.name.localeCompare(b.name));
   if(filtered.length===0){
-    container.innerHTML = '<div class="empty-state">' + (organisations.length===0 ? 'No organisations yet. Add your first one.' : 'No organisations match that search.') + '</div>';
-    paginationEl.innerHTML = '';
+    container.innerHTML = '<div class="empty-state">' +
+      (organisations.length===0 ? 'No organisations yet. Add your first one.'
+        : organisationsLetter!=='ALL' ? 'No organisations starting with "'+organisationsLetter+'".'
+        : 'No organisations match that search.') + '</div>';
     return;
   }
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ORGANISATIONS_PAGE_SIZE));
-  organisationsPage = Math.min(Math.max(1, organisationsPage), totalPages);
-  const start = (organisationsPage-1)*ORGANISATIONS_PAGE_SIZE;
-  const pageItems = filtered.slice(start, start+ORGANISATIONS_PAGE_SIZE);
-
   let html = '<table class="qtable"><thead><tr><th>Organisation</th><th>Contacts</th><th>Open tasks</th><th>Status</th></tr></thead><tbody>';
-  pageItems.forEach(row=>{
+  filtered.forEach(row=>{
     const contactCount = contacts.filter(c=>c.organisation_id===row.id).length;
     const openTaskCount = tasks.filter(t=>t.organisation_id===row.id && t.status!=='done').length;
     const isLive = row.onboarding_status === 'live';
@@ -2590,7 +2586,6 @@ function renderOrganisationsList(){
   });
   html += '</tbody></table>';
   container.innerHTML = html;
-  paginationEl.innerHTML = paginationBarHtml(organisationsPage, ORGANISATIONS_PAGE_SIZE, filtered.length, 'goToOrganisationsPage');
 }
 
 function openOrganisationDetail(orgId){
