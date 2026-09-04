@@ -1160,11 +1160,6 @@
     </div>
     <div class="field" id="aBatchField"><label>Batch / QR label</label><input id="aBatch"></div>
     <div class="field" id="aInformationField"><label>Status / information</label><input id="aInformation"></div>
-    <div class="field"><label>Address</label><input id="aAddress"></div>
-    <div class="field-row" id="skipLocationRow1">
-      <div class="field"><label>Postcode</label><input id="aPostcode"></div>
-      <div class="field"><label>Sited date</label><input id="aSitedDate" type="date"></div>
-    </div>
     <div class="field" id="skipCustomerNameField"><label>Customer name</label><input id="aCustomerName" list="assetCustomerOrgOptions" autocomplete="off"></div>
     <datalist id="assetCustomerOrgOptions"></datalist>
     <div class="field-row">
@@ -1174,6 +1169,22 @@
     </div>
     <p style="font-size:12px;color:var(--slate);margin-top:-10px;">Pick a name from the list where possible — this keeps Dockit's customer/housing association records matched up with the real companies instead of one-off spellings.</p>
     <div class="field" id="aInvoiceContactField"><label>Invoice contact</label><input id="aInvoiceContact"></div>
+
+    <div class="field" id="aAddressField"><label>Address</label><input id="aAddress"></div>
+
+    <div id="aSkipAddressFields" style="display:none;">
+      <div class="field"><label>Address line 1</label><input id="aAddressLine1"></div>
+      <div class="field"><label>Address line 2</label><input id="aAddressLine2"></div>
+      <div class="field-row">
+        <div class="field"><label>Town</label><input id="aTown"></div>
+        <div class="field"><label>County</label><input id="aCounty"></div>
+      </div>
+    </div>
+
+    <div class="field-row" id="skipLocationRow1">
+      <div class="field"><label>Postcode</label><input id="aPostcode"></div>
+      <div class="field"><label>Sited date</label><input id="aSitedDate" type="date"></div>
+    </div>
 
     <div id="scpOnlySection">
       <div class="onboard-section">
@@ -1190,19 +1201,35 @@
       <div class="onboard-section">
         <div class="onboard-section-head"><span class="onboard-section-title">Container details</span></div>
         <div class="field-row">
-          <div class="field"><label>Container type</label><input id="aContainerType"></div>
+          <div class="field"><label>Smart skip type</label><input id="aContainerType" list="assetContainerTypeOptions" autocomplete="off"></div>
+          <datalist id="assetContainerTypeOptions"></datalist>
           <div class="field"><label>Volume (yd³)</label><input id="aContainerVolume"></div>
         </div>
         <div class="field-row">
           <div class="field"><label>Waste stream</label><input id="aWasteStream"></div>
-          <div class="field"><label>Paint drum</label><input id="aPaintDrum"></div>
+          <div class="field">
+            <label>Paint drum</label>
+            <select id="aPaintDrum">
+              <option value="">Select</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          </div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Padlock number</label><input id="aPadlockNumber"></div>
-          <div class="field"><label>Sensor serial</label><input id="aSensorSerial"></div>
+          <div class="field"><label>Padlock code</label><input id="aPadlockNumber"></div>
+          <div class="field">
+            <label>Sensor serial</label>
+            <input id="aSensorSerial">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:400;margin:4px 0 0;">
+              <input type="checkbox" id="aSensorSerialNA" style="width:auto;" onchange="onSensorSerialNAChange()">
+              No sensor fitted / N/A
+            </label>
+          </div>
         </div>
+        <div class="field"><label>Gate code number</label><input id="aGateCodeNumber"></div>
       </div>
-      <div class="onboard-section">
+      <div class="onboard-section" id="skipStatusChecksSection">
         <div class="onboard-section-head"><span class="onboard-section-title">Status checks</span></div>
         <div class="field-row">
           <div class="field"><label>Fill sensor</label><input id="aFillSensor"></div>
@@ -1210,7 +1237,7 @@
           <div class="field"><label>Signage</label><input id="aSignage"></div>
         </div>
       </div>
-      <div class="onboard-section">
+      <div class="onboard-section" id="skipCommercialSection">
         <div class="onboard-section-head"><span class="onboard-section-title">Commercial</span></div>
         <div class="field"><label>Subbie / hauler</label><input id="aSubbie"></div>
         <div class="field-row">
@@ -1226,7 +1253,7 @@
       <label for="aRetired" style="margin:0;">Out of production / retired — frees up this asset number for reuse on a new skip</label>
     </div>
 
-    <div class="field"><label>Notes</label><textarea id="aNotes"></textarea></div>
+    <div class="field" id="aNotesField"><label>Notes</label><textarea id="aNotes"></textarea></div>
 
     <div class="modal-actions">
       <button class="btn danger small" id="assetDeleteBtn" style="display:none;" onclick="deleteAsset()">Delete</button>
@@ -3154,10 +3181,11 @@ async function deleteTeamMember(){
 const ASSET_TYPE_NUMBER_START = { skip: 100, scp: 9001 };
 const ASSET_FIELD_IDS = {
   assetType:'aAssetType', assetNumber:'aAssetNumber', batch:'aBatch', information:'aInformation',
-  address:'aAddress', postcode:'aPostcode', sitedDate:'aSitedDate', customerName:'aCustomerName',
+  address:'aAddress', addressLine1:'aAddressLine1', addressLine2:'aAddressLine2', town:'aTown', county:'aCounty',
+  postcode:'aPostcode', sitedDate:'aSitedDate', customerName:'aCustomerName',
   housingAssociation:'aHousingAssociation', branchInvoiceNo:'aBranchInvoiceNo', invoiceContact:'aInvoiceContact',
   containerType:'aContainerType', containerVolume:'aContainerVolume', wasteStream:'aWasteStream', paintDrum:'aPaintDrum',
-  padlockNumber:'aPadlockNumber', sensorSerial:'aSensorSerial',
+  padlockNumber:'aPadlockNumber', sensorSerial:'aSensorSerial', gateCodeNumber:'aGateCodeNumber',
   fillSensor:'aFillSensor', qr:'aQr', signage:'aSignage',
   subbie:'aSubbie', groupedInvoicing:'aGroupedInvoicing', weeklyRental:'aWeeklyRental',
   masterPin:'aMasterPin', branch:'aBranch', branchContact:'aBranchContact',
@@ -3167,10 +3195,12 @@ const ASSET_FIELD_IDS = {
 function assetRowToCamel(row){
   return {
     id: row.id, assetType: row.asset_type, assetNumber: row.asset_number, batch: row.batch, information: row.information,
-    address: row.address, postcode: row.postcode, sitedDate: row.sited_date, customerName: row.customer_name,
+    address: row.address, addressLine1: row.address_line_1, addressLine2: row.address_line_2, town: row.town, county: row.county,
+    postcode: row.postcode, sitedDate: row.sited_date, customerName: row.customer_name,
     housingAssociation: row.housing_association, branchInvoiceNo: row.branch_invoice_no, invoiceContact: row.invoice_contact,
     containerType: row.container_type, containerVolume: row.container_volume, wasteStream: row.waste_stream, paintDrum: row.paint_drum,
-    padlockNumber: row.padlock_number, sensorSerial: row.sensor_serial, fillSensor: row.fill_sensor, qr: row.qr, signage: row.signage,
+    padlockNumber: row.padlock_number, sensorSerial: row.sensor_serial, gateCodeNumber: row.gate_code_number,
+    fillSensor: row.fill_sensor, qr: row.qr, signage: row.signage,
     subbie: row.subbie, groupedInvoicing: row.grouped_invoicing, weeklyRental: row.weekly_rental,
     masterPin: row.master_pin, branch: row.branch, branchContact: row.branch_contact, notes: row.notes,
     latitude: row.latitude, longitude: row.longitude, retired: row.retired||false,
@@ -3182,11 +3212,13 @@ function assetRowToCamel(row){
 function camelToAssetRow(a){
   return {
     asset_type: a.assetType, asset_number: a.assetNumber, batch: a.batch||null, information: a.information||null,
-    address: a.address||null, postcode: a.postcode||null, sited_date: a.sitedDate||null, customer_name: a.customerName||null,
+    address: a.address||null, address_line_1: a.addressLine1||null, address_line_2: a.addressLine2||null, town: a.town||null, county: a.county||null,
+    postcode: a.postcode||null, sited_date: a.sitedDate||null, customer_name: a.customerName||null,
     housing_association: a.housingAssociation||null, branch_invoice_no: a.branchInvoiceNo||null, invoice_contact: a.invoiceContact||null,
     customer_org_id: a.customerOrgId||null, housing_association_org_id: a.housingAssociationOrgId||null,
     container_type: a.containerType||null, container_volume: a.containerVolume||null, waste_stream: a.wasteStream||null, paint_drum: a.paintDrum||null,
-    padlock_number: a.padlockNumber||null, sensor_serial: a.sensorSerial||null, fill_sensor: a.fillSensor||null, qr: a.qr||null, signage: a.signage||null,
+    padlock_number: a.padlockNumber||null, sensor_serial: a.sensorSerial||null, gate_code_number: a.gateCodeNumber||null,
+    fill_sensor: a.fillSensor||null, qr: a.qr||null, signage: a.signage||null,
     subbie: a.subbie||null, grouped_invoicing: a.groupedInvoicing||null, weekly_rental: a.weeklyRental||null,
     master_pin: a.masterPin||null, branch: a.branch||null, branch_contact: a.branchContact||null, notes: a.notes||null,
     retired: a.retired||false, on_order: a.onOrder||false, manufacturer: a.manufacturer||null,
@@ -3229,6 +3261,13 @@ function populateAssetOrgDatalists(){
   document.getElementById('assetHousingAssociationOrgOptions').innerHTML = organisations.filter(o=>knownHaOrgIds.has(o.id)).slice()
     .sort((a,b)=>a.name.localeCompare(b.name))
     .map(o=>'<option value="'+escapeHtml(o.name)+'">').join('');
+
+  // "Smart skip type" is a free-typed field, not a fixed enum -- whatever
+  // gets typed in shows up in this dropdown from then on, same pattern as
+  // customer/housing association above but without organisation resolution.
+  const knownContainerTypes = Array.from(new Set(assets.map(a=>a.containerType).filter(Boolean))).sort();
+  document.getElementById('assetContainerTypeOptions').innerHTML = knownContainerTypes
+    .map(t=>'<option value="'+escapeHtml(t)+'">').join('');
 }
 
 async function loadAssets(){
@@ -3560,16 +3599,39 @@ async function geocodeAssetPostcodes(assetsNeedingGeocode){
 }
 
 
+// Adding a brand-new smart skip only asks for the fields that block Lockit
+// pickup or physical setup -- everything else here (manufacturer, batch,
+// commercial/status-check fields, notes) is still on the asset and editable,
+// just not demanded up front. Editing an existing asset always shows everything.
 function onAssetTypeChange(){
   const isScp = document.getElementById('aAssetType').value === 'scp';
+  const isAddMode = !!window._assetIsAddMode;
+  const hideLeftover = isAddMode && !isScp;
+
   document.getElementById('scpOnlySection').style.display = isScp ? 'block' : 'none';
   document.getElementById('skipOnlyFields').style.display = isScp ? 'none' : 'block';
-  document.getElementById('aBatchField').style.display = isScp ? 'none' : 'block';
-  document.getElementById('aInformationField').style.display = isScp ? 'none' : 'block';
   document.getElementById('skipLocationRow1').style.display = isScp ? 'none' : 'flex';
   document.getElementById('skipCustomerNameField').style.display = isScp ? 'none' : 'block';
-  document.getElementById('aBranchInvoiceField').style.display = isScp ? 'none' : 'block';
-  document.getElementById('aInvoiceContactField').style.display = isScp ? 'none' : 'block';
+  document.getElementById('aBranchInvoiceField').style.display = (isScp || hideLeftover) ? 'none' : 'block';
+  document.getElementById('aInvoiceContactField').style.display = (isScp || hideLeftover) ? 'none' : 'block';
+
+  document.getElementById('aAddressField').style.display = isScp ? 'block' : 'none';
+  document.getElementById('aSkipAddressFields').style.display = isScp ? 'none' : 'block';
+
+  document.getElementById('aManufacturerField').style.display = (!isScp && !hideLeftover) ? 'block' : 'none';
+  document.getElementById('aBatchField').style.display = (isScp || hideLeftover) ? 'none' : 'block';
+  document.getElementById('aInformationField').style.display = (isScp || hideLeftover) ? 'none' : 'block';
+  document.getElementById('skipStatusChecksSection').style.display = hideLeftover ? 'none' : 'block';
+  document.getElementById('skipCommercialSection').style.display = hideLeftover ? 'none' : 'block';
+  document.getElementById('aNotesField').style.display = hideLeftover ? 'none' : 'block';
+}
+
+function onSensorSerialNAChange(){
+  const na = document.getElementById('aSensorSerialNA').checked;
+  const input = document.getElementById('aSensorSerial');
+  input.disabled = na;
+  if(na) input.value = 'N/A';
+  else if(input.value === 'N/A') input.value = '';
 }
 
 function nextAvailableAssetNumber(assetType){
@@ -3603,8 +3665,14 @@ function openAssetModal(id){
   if(!a){ document.getElementById('aAssetNumber').value = nextAvailableAssetNumber(type); }
   document.getElementById('aRetired').checked = a ? !!a.retired : false;
   window._openingAsOnOrder = isNewOnOrder || (a ? !!a.onOrder : false);
+  window._assetIsAddMode = !a;
+  // Older assets only have the single combined "Address" line filled in --
+  // surface it in Address line 1 so it's still visible/editable rather than
+  // looking blank just because it predates the line1/town/county split.
+  if(a && !a.addressLine1 && a.address){ document.getElementById('aAddressLine1').value = a.address; }
+  document.getElementById('aSensorSerialNA').checked = !!(a && a.sensorSerial === 'N/A');
+  onSensorSerialNAChange();
   onAssetTypeChange();
-  document.getElementById('aManufacturerField').style.display = (type==='skip') ? 'block' : 'none';
   document.getElementById('fullDetailsSection').style.display = isNewOnOrder ? 'none' : 'block';
   const isExistingOnOrder = !!(a && a.onOrder);
   document.getElementById('aReservedFieldsWrap').style.display = (isNewOnOrder || isExistingOnOrder) ? 'block' : 'none';
@@ -3613,6 +3681,27 @@ function openAssetModal(id){
   document.getElementById('aMarkDelivered').checked = false;
   document.getElementById('assetDeleteBtn').style.display = a ? 'inline-flex' : 'none';
   document.getElementById('assetModalOverlay').classList.add('active');
+}
+
+// Shared required-field list for a live/deliverable smart skip -- used both
+// when marking an on-order skip delivered and when saving a normal live one.
+// Housing association is deliberately not required here (it often isn't known
+// yet), unlike customer name/address/container details which Lockit and the
+// yard both need before this skip is genuinely ready to be out with a customer.
+function missingSkipRequiredFields(data){
+  const missing = [];
+  if(!data.customerName) missing.push('Customer name');
+  if(!data.addressLine1) missing.push('Address line 1');
+  if(!data.town) missing.push('Town');
+  if(!data.county) missing.push('County');
+  if(!data.postcode) missing.push('Postcode');
+  if(!data.sitedDate) missing.push('Sited date');
+  if(!data.padlockNumber) missing.push('Padlock code');
+  if(!data.containerType) missing.push('Smart skip type');
+  if(!data.containerVolume) missing.push('Volume (yd³)');
+  if(!data.wasteStream) missing.push('Waste stream');
+  if(!data.paintDrum) missing.push('Paint drum');
+  return missing;
 }
 
 async function saveAsset(){
@@ -3627,6 +3716,12 @@ async function saveAsset(){
     if(key==='assetType') return;
     data[key] = document.getElementById(ASSET_FIELD_IDS[key]).value.trim();
   });
+  // The single "Address" column stays populated (built from the split fields)
+  // so search, the assets table, the map popup, and geocoding -- which all
+  // still read it directly -- keep working unchanged for skip assets.
+  if(assetType === 'skip'){
+    data.address = [data.addressLine1, data.addressLine2, data.town, data.county].filter(Boolean).join(', ');
+  }
   if(data.reservedConfirmed && (!data.reservedForName || !data.reservedForAddress)){
     showToast('Fill in who this smart skip is for and its address before confirming.', true);
     return;
@@ -3642,10 +3737,7 @@ async function saveAsset(){
   const justPromoted = markingDelivered;
 
   if(markingDelivered){
-    const missing = [];
-    if(!data.customerName) missing.push('Customer name');
-    if(!data.housingAssociation) missing.push('Housing association');
-    if(!data.address) missing.push('Address');
+    const missing = missingSkipRequiredFields(data);
     if(missing.length){
       showToast('Fill in these before marking delivered/live: ' + missing.join(', ') + '.', true);
       return;
@@ -3653,12 +3745,9 @@ async function saveAsset(){
   }
 
   if(assetType === 'skip' && !data.retired && !data.onOrder){
-    const missing = [];
-    if(!data.customerName) missing.push('Customer name');
-    if(!data.housingAssociation) missing.push('Housing association');
-    if(!data.address) missing.push('Address');
+    const missing = missingSkipRequiredFields(data);
     if(missing.length){
-      showToast('Smart skips need these filled in for Lockit to pick them up: ' + missing.join(', ') + '.', true);
+      showToast('Smart skips need these filled in: ' + missing.join(', ') + '.', true);
       return;
     }
   }
