@@ -1128,8 +1128,9 @@
     <p class="modal-title"><span id="assetModalTitle">New asset</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('assetModalOverlay')">✕</span></p>
     <input type="hidden" id="assetId">
     <input type="hidden" id="aAssetType" value="skip">
+    <p style="font-size:12.5px;color:var(--slate);margin-top:-4px;">Fields marked * are required.</p>
 
-    <div class="field"><label>Asset number</label><input id="aAssetNumber"></div>
+    <div class="field"><label>Asset number *</label><input id="aAssetNumber"></div>
 
     <div class="field" id="aManufacturerField" style="display:none;">
       <label>Manufacturer</label>
@@ -1160,7 +1161,7 @@
     </div>
     <div class="field" id="aBatchField"><label>Batch / QR label</label><input id="aBatch"></div>
     <div class="field" id="aInformationField"><label>Status / information</label><input id="aInformation"></div>
-    <div class="field" id="skipCustomerNameField"><label>Customer name</label><input id="aCustomerName" list="assetCustomerOrgOptions" autocomplete="off"></div>
+    <div class="field" id="skipCustomerNameField"><label>Customer name *</label><input id="aCustomerName" list="assetCustomerOrgOptions" autocomplete="off"></div>
     <datalist id="assetCustomerOrgOptions"></datalist>
     <div class="field-row">
       <div class="field"><label>Housing association</label><input id="aHousingAssociation" list="assetHousingAssociationOrgOptions" autocomplete="off"></div>
@@ -1173,17 +1174,17 @@
     <div class="field" id="aAddressField"><label>Address</label><input id="aAddress"></div>
 
     <div id="aSkipAddressFields" style="display:none;">
-      <div class="field"><label>Address line 1</label><input id="aAddressLine1"></div>
+      <div class="field"><label>Address line 1 *</label><input id="aAddressLine1"></div>
       <div class="field"><label>Address line 2</label><input id="aAddressLine2"></div>
       <div class="field-row">
-        <div class="field"><label>Town</label><input id="aTown"></div>
-        <div class="field"><label>County</label><input id="aCounty"></div>
+        <div class="field"><label>Town *</label><input id="aTown"></div>
+        <div class="field"><label>County *</label><input id="aCounty"></div>
       </div>
     </div>
 
     <div class="field-row" id="skipLocationRow1">
-      <div class="field"><label>Postcode</label><input id="aPostcode"></div>
-      <div class="field"><label>Sited date</label><input id="aSitedDate" type="date"></div>
+      <div class="field"><label>Postcode *</label><input id="aPostcode"></div>
+      <div class="field"><label>Sited date *</label><input id="aSitedDate" type="date"></div>
     </div>
 
     <div id="scpOnlySection">
@@ -1201,14 +1202,14 @@
       <div class="onboard-section">
         <div class="onboard-section-head"><span class="onboard-section-title">Container details</span></div>
         <div class="field-row">
-          <div class="field"><label>Smart skip type</label><input id="aContainerType" list="assetContainerTypeOptions" autocomplete="off"></div>
+          <div class="field"><label>Smart skip type *</label><input id="aContainerType" list="assetContainerTypeOptions" autocomplete="off"></div>
           <datalist id="assetContainerTypeOptions"></datalist>
-          <div class="field"><label>Volume (yd³)</label><input id="aContainerVolume"></div>
+          <div class="field"><label>Volume (yd³) *</label><input id="aContainerVolume"></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Waste stream</label><input id="aWasteStream"></div>
+          <div class="field"><label>Waste stream *</label><input id="aWasteStream"></div>
           <div class="field">
-            <label>Paint drum</label>
+            <label>Paint drum *</label>
             <select id="aPaintDrum">
               <option value="">Select</option>
               <option value="Yes">Yes</option>
@@ -1217,7 +1218,7 @@
           </div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Padlock code</label><input id="aPadlockNumber"></div>
+          <div class="field"><label>Padlock code *</label><input id="aPadlockNumber"></div>
           <div class="field">
             <label>Sensor serial</label>
             <input id="aSensorSerial">
