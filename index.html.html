@@ -1416,10 +1416,28 @@ const LOGO_JPEG_BASE64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDR
 
 let currentUser = null;
 let currentProfile = null;
+// Which letter the Contacts/Organisations lists open on advances by one
+// every time the page is actually reloaded (not on every in-app view
+// switch, since that doesn't re-run this init) -- so a refresh shows A,
+// the next shows B, then C, and so on, rather than always landing on the
+// same letter. Remembered in localStorage so it survives the reload itself.
+const ROTATING_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','#'];
+function nextRotatingLetter(storageKey){
+  try{
+    const stored = parseInt(localStorage.getItem(storageKey), 10);
+    const idx = (isNaN(stored) ? -1 : stored) + 1;
+    const wrapped = idx % ROTATING_LETTERS.length;
+    localStorage.setItem(storageKey, String(wrapped));
+    return ROTATING_LETTERS[wrapped];
+  }catch(e){
+    return 'A';
+  }
+}
+
 let contacts = [];
-let contactsLetter = 'A';
+let contactsLetter = nextRotatingLetter('dockitContactsLetterIndex');
 let organisations = [];
-let organisationsLetter = 'A';
+let organisationsLetter = nextRotatingLetter('dockitOrganisationsLetterIndex');
 let organisationLinks = [];
 let featureRequests = [];
 let frScreenshotFile = null;
@@ -2048,8 +2066,9 @@ function orgName(c){
 // filtered/sorted client-side (every table in this app works that way --
 // there's no server-side range query anywhere). "#" catches anything that
 // doesn't start with a letter (numbers, punctuation).
-const LETTER_BAR_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','#'];
+const LETTER_BAR_LETTERS = ['ALL', ...ROTATING_LETTERS];
 function nameMatchesLetter(name, letter){
+  if(letter==='ALL') return true;
   const first = (name||'').trim().charAt(0).toUpperCase();
   if(letter==='#') return !(first >= 'A' && first <= 'Z');
   return first === letter;
@@ -2058,7 +2077,7 @@ function letterBarHtml(activeLetter, gotoFn){
   return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;">' +
     LETTER_BAR_LETTERS.map(l=>{
       const isActive = l===activeLetter;
-      return '<button class="btn '+(isActive?'':'ghost')+' small" style="padding:4px 9px;min-width:28px;" onclick="'+gotoFn+'(\''+l+'\')">'+l+'</button>';
+      return '<button class="btn '+(isActive?'':'ghost')+' small" style="padding:4px 9px;min-width:28px;" onclick="'+gotoFn+'(\''+l+'\')">'+(l==='ALL'?'All':l)+'</button>';
     }).join('') +
   '</div>';
 }
@@ -2080,6 +2099,7 @@ function renderContacts(){
   if(filtered.length===0){
     container.innerHTML = '<div class="empty-state">' +
       (contacts.length===0 ? 'No contacts yet. Add your first one.'
+        : contactsLetter==='ALL' ? 'No contacts match that search.'
         : q ? 'No contacts starting with "'+contactsLetter+'" match that search.'
         : 'No contacts starting with "'+contactsLetter+'".') +
       '</div>';
@@ -2567,6 +2587,7 @@ function renderOrganisationsList(){
   if(filtered.length===0){
     container.innerHTML = '<div class="empty-state">' +
       (organisations.length===0 ? 'No organisations yet. Add your first one.'
+        : organisationsLetter==='ALL' ? 'No organisations match that search.'
         : q ? 'No organisations starting with "'+organisationsLetter+'" match that search.'
         : 'No organisations starting with "'+organisationsLetter+'".') + '</div>';
     return;
