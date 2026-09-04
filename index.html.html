@@ -1141,11 +1141,8 @@
 
     <div class="field" id="aManufacturerField" style="display:none;">
       <label>Manufacturer</label>
-      <select id="aManufacturer">
-        <option value="">Select manufacturer</option>
-        <option value="JS Burgess">JS Burgess</option>
-        <option value="Premier Bodies">Premier Bodies</option>
-      </select>
+      <input id="aManufacturer" list="assetManufacturerOptions" autocomplete="off">
+      <datalist id="assetManufacturerOptions"></datalist>
     </div>
 
     <div id="aReservedFieldsWrap" style="display:none;">
@@ -3356,6 +3353,13 @@ function populateAssetOrgDatalists(){
   const knownContainerTypes = Array.from(new Set(assets.map(a=>a.containerType).filter(Boolean))).sort();
   document.getElementById('assetContainerTypeOptions').innerHTML = knownContainerTypes
     .map(t=>'<option value="'+escapeHtml(t)+'">').join('');
+
+  // Manufacturer used to be a fixed two-option dropdown -- now a creatable
+  // field like Smart skip type above, so whoever ordered the skip can pick
+  // an existing manufacturer or type a new one that sticks around from then on.
+  const knownManufacturers = Array.from(new Set(assets.map(a=>a.manufacturer).filter(Boolean))).sort();
+  document.getElementById('assetManufacturerOptions').innerHTML = knownManufacturers
+    .map(t=>'<option value="'+escapeHtml(t)+'">').join('');
 }
 
 async function loadAssets(){
@@ -3709,14 +3713,16 @@ async function geocodeAssetPostcodes(assetsNeedingGeocode){
 }
 
 
-// Adding a brand-new smart skip only asks for the fields that block Lockit
-// pickup or physical setup -- everything else here (manufacturer, batch,
-// commercial/status-check fields, notes) is still on the asset and editable,
-// just not demanded up front. Editing an existing asset always shows everything.
+// Adding a brand-new smart skip -- or one still on order, whether that's a
+// fresh on-order skip or editing/delivering an existing one -- only asks for
+// the fields that block Lockit pickup or physical setup; everything else
+// here (batch, commercial/status-check fields) is still on the asset and
+// editable, just not demanded until it's a live skip. Manufacturer is kept
+// visible throughout since it matters from the moment a skip is ordered.
 function onAssetTypeChange(){
   const isScp = document.getElementById('aAssetType').value === 'scp';
-  const isAddMode = !!window._assetIsAddMode;
-  const hideLeftover = isAddMode && !isScp;
+  const useReducedFields = !!window._assetUseReducedFields;
+  const hideLeftover = useReducedFields && !isScp;
 
   document.getElementById('scpOnlySection').style.display = isScp ? 'block' : 'none';
   document.getElementById('skipOnlyFields').style.display = isScp ? 'none' : 'block';
@@ -3728,7 +3734,7 @@ function onAssetTypeChange(){
   document.getElementById('aAddressField').style.display = isScp ? 'block' : 'none';
   document.getElementById('aSkipAddressFields').style.display = isScp ? 'none' : 'block';
 
-  document.getElementById('aManufacturerField').style.display = (!isScp && !hideLeftover) ? 'block' : 'none';
+  document.getElementById('aManufacturerField').style.display = !isScp ? 'block' : 'none';
   document.getElementById('aBatchField').style.display = (isScp || hideLeftover) ? 'none' : 'block';
   document.getElementById('aInformationField').style.display = (isScp || hideLeftover) ? 'none' : 'block';
   document.getElementById('skipStatusChecksSection').style.display = hideLeftover ? 'none' : 'block';
@@ -3774,7 +3780,11 @@ function openAssetModal(id){
   if(!a){ document.getElementById('aAssetNumber').value = nextAvailableAssetNumber(type); }
   document.getElementById('aRetired').checked = a ? !!a.retired : false;
   window._openingAsOnOrder = isNewOnOrder || (a ? !!a.onOrder : false);
-  window._assetIsAddMode = !a;
+  // The reduced field set applies whenever adding a brand-new asset, and also
+  // for the whole time a skip is still on order (editing it, or the moment
+  // it's marked delivered) -- only once it's genuinely live does the full
+  // field set (batch, commercial, status-check fields) come back for editing.
+  window._assetUseReducedFields = !a || window._openingAsOnOrder;
   // Older assets only have the single combined "Address" line filled in --
   // surface it in Address line 1 so it's still visible/editable rather than
   // looking blank just because it predates the line1/town/county split.
