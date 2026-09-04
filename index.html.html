@@ -1146,7 +1146,7 @@
     </div>
 
     <div id="aReservedFieldsWrap" style="display:none;">
-      <div class="field"><label>Customer *</label><input id="aReservedForName" placeholder="e.g. Sovereign - possible new site"></div>
+      <div class="field"><label>Who is this smart skip for? (optional, just a note for now)</label><input id="aReservedForName" placeholder="e.g. Sovereign - possible new site"></div>
       <div class="field"><label>What address is this smart skip for? (optional, rough note is fine)</label><input id="aReservedForAddress" placeholder="e.g. somewhere near Yeovil"></div>
       <div class="field" style="background:#FDF3E0;padding:10px 12px;border-radius:6px;">
         <label style="display:flex;align-items:center;gap:8px;margin:0;">
@@ -3855,18 +3855,14 @@ async function saveAsset(){
   data.onOrder = wasOnOrder && !markingDelivered;
   const justPromoted = markingDelivered;
 
-  // Every on-order skip now needs a manufacturer and a customer from the
-  // moment it's created -- there's no more "available, unassigned" on-order
-  // stock. This only applies while it's still on order; markingDelivered
-  // clears data.onOrder above, so this doesn't double up with that check.
-  if(assetType === 'skip' && data.onOrder && !data.retired){
-    const missing = [];
-    if(!data.manufacturer) missing.push('Manufacturer');
-    if(!data.reservedForName) missing.push('Customer');
-    if(missing.length){
-      showToast('On-order smart skips need these filled in: ' + missing.join(', ') + '.', true);
-      return;
-    }
+  // Every on-order skip needs a manufacturer from the moment it's created.
+  // Customer is deliberately not required here -- on-order skips can still
+  // be created before a specific customer is known. This only applies
+  // while it's still on order; markingDelivered clears data.onOrder above,
+  // so this doesn't double up with that check.
+  if(assetType === 'skip' && data.onOrder && !data.retired && !data.manufacturer){
+    showToast('On-order smart skips need a manufacturer filled in.', true);
+    return;
   }
 
   if(markingDelivered){
