@@ -1140,13 +1140,13 @@
     <div class="field"><label>Asset number *</label><input id="aAssetNumber"></div>
 
     <div class="field" id="aManufacturerField" style="display:none;">
-      <label>Manufacturer</label>
+      <label>Manufacturer *</label>
       <input id="aManufacturer" list="assetManufacturerOptions" autocomplete="off">
       <datalist id="assetManufacturerOptions"></datalist>
     </div>
 
     <div id="aReservedFieldsWrap" style="display:none;">
-      <div class="field"><label>Who is this smart skip for? (optional, just a note for now)</label><input id="aReservedForName" placeholder="e.g. Sovereign - possible new site"></div>
+      <div class="field"><label>Customer *</label><input id="aReservedForName" placeholder="e.g. Sovereign - possible new site"></div>
       <div class="field"><label>What address is this smart skip for? (optional, rough note is fine)</label><input id="aReservedForAddress" placeholder="e.g. somewhere near Yeovil"></div>
       <div class="field" style="background:#FDF3E0;padding:10px 12px;border-radius:6px;">
         <label style="display:flex;align-items:center;gap:8px;margin:0;">
@@ -3854,6 +3854,20 @@ async function saveAsset(){
   const markingDelivered = wasOnOrder && document.getElementById('aMarkDelivered').checked;
   data.onOrder = wasOnOrder && !markingDelivered;
   const justPromoted = markingDelivered;
+
+  // Every on-order skip now needs a manufacturer and a customer from the
+  // moment it's created -- there's no more "available, unassigned" on-order
+  // stock. This only applies while it's still on order; markingDelivered
+  // clears data.onOrder above, so this doesn't double up with that check.
+  if(assetType === 'skip' && data.onOrder && !data.retired){
+    const missing = [];
+    if(!data.manufacturer) missing.push('Manufacturer');
+    if(!data.reservedForName) missing.push('Customer');
+    if(missing.length){
+      showToast('On-order smart skips need these filled in: ' + missing.join(', ') + '.', true);
+      return;
+    }
+  }
 
   if(markingDelivered){
     const missing = missingSkipRequiredFields(data);
