@@ -3798,7 +3798,7 @@ function openAssetModal(id){
   document.getElementById('aReservedConfirmed').checked = a ? !!a.reservedConfirmed : false;
   document.getElementById('aMarkDeliveredField').style.display = isExistingOnOrder ? 'block' : 'none';
   document.getElementById('aMarkDelivered').checked = false;
-  document.getElementById('assetDeleteBtn').style.display = a ? 'inline-flex' : 'none';
+  document.getElementById('assetDeleteBtn').style.display = (a && currentProfile.role === 'admin') ? 'inline-flex' : 'none';
   document.getElementById('assetModalOverlay').classList.add('active');
 }
 
@@ -3921,6 +3921,7 @@ async function saveAsset(){
 async function deleteAsset(){
   const id = document.getElementById('assetId').value;
   if(!id) return;
+  if(currentProfile.role !== 'admin'){ showToast('Only admins can delete an asset.', true); return; }
   if(!confirm('Delete this asset? This cannot be undone.')) return;
   const { error } = await sb.from('assets').delete().eq('id', id);
   if(error){ showToast('Could not delete: ' + error.message, true); return; }
