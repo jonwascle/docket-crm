@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --paper:#F7F5F0; --paper-card:#FFFFFF; --paper-card-alt:#FBFAF7;
@@ -622,12 +623,16 @@
           <p class="view-title" id="assetsViewTitle">Smart skips</p>
           <p class="view-sub" id="assetsViewSub">Your fleet of smart skips out with customers.</p>
         </div>
-        <button class="btn small" id="assetsAddBtn" onclick="openAssetModal()">+ New smart skip</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn ghost small" onclick="exportAssetsToExcel()">Export to Excel</button>
+          <button class="btn small" id="assetsAddBtn" onclick="openAssetModal()">+ New smart skip</button>
+        </div>
       </div>
       <div class="subtabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);">
         <span class="subtab active" data-subview="skip" onclick="switchAssetSubview('skip')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Smart skips</span>
         <span class="subtab" data-subview="on_order" onclick="switchAssetSubview('on_order')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">On order</span>
         <span class="subtab" data-subview="scp" onclick="switchAssetSubview('scp')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Collection points</span>
+        <span class="subtab" data-subview="retired" onclick="switchAssetSubview('retired')" style="padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;">Retired</span>
       </div>
       <div id="assetsStatsRow" style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;"></div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
@@ -3288,16 +3293,19 @@ async function loadSkipRequests(){
 function switchAssetSubview(view){
   currentAssetSubview = view;
   document.querySelectorAll('#view-assets .subtab').forEach(el=>el.classList.toggle('active', el.dataset.subview===view));
-  document.getElementById('assetsViewTitle').textContent = view==='skip' ? 'Smart skips' : view==='on_order' ? 'On order' : 'Collection points';
+  document.getElementById('assetsViewTitle').textContent = view==='skip' ? 'Smart skips' : view==='on_order' ? 'On order' : view==='retired' ? 'Retired assets' : 'Collection points';
   document.getElementById('assetsViewSub').textContent = view==='skip'
     ? 'Your fleet of smart skips out with customers.' : view==='on_order'
-    ? 'Smart skips being manufactured, with an asset number allocated but not yet earmarked for a customer.'
+    ? 'Smart skips being manufactured, with an asset number allocated but not yet earmarked for a customer.' : view==='retired'
+    ? 'Assets taken out of service — kept here for reference, not shown in the live lists.'
     : 'Your smart collection points and locker sites.';
+  document.getElementById('assetsAddBtn').style.display = view==='retired' ? 'none' : 'inline-flex';
   document.getElementById('assetsAddBtn').textContent = view==='skip' ? '+ New smart skip' : view==='on_order' ? '+ New on-order skip' : '+ New collection point';
   document.getElementById('assetSearch').placeholder = view==='skip'
     ? 'Search by asset number, customer, address, or postcode' : view==='on_order' ? 'Search by asset number or manufacturer'
+    : view==='retired' ? 'Search by asset number, customer, or address'
     : 'Search by asset number, housing association, address, or branch';
-  document.getElementById('assetsMapToggleBtn').style.display = view==='on_order' ? 'none' : 'inline-flex';
+  document.getElementById('assetsMapToggleBtn').style.display = (view==='on_order' || view==='retired') ? 'none' : 'inline-flex';
   document.getElementById('skipRequestsSection').style.display = view==='on_order' ? 'block' : 'none';
   showAssetsListView();
   renderAssets();
@@ -3392,10 +3400,12 @@ function renderAssets(){
   const filtered = assets.filter(a=>{
     if(currentAssetSubview==='on_order'){
       if((a.assetType||'skip') !== 'skip' || !a.onOrder) return false;
+    }else if(currentAssetSubview==='retired'){
+      if(!a.retired) return false;
     }else if(currentAssetSubview==='skip'){
-      if((a.assetType||'skip') !== 'skip' || a.onOrder) return false;
+      if((a.assetType||'skip') !== 'skip' || a.onOrder || a.retired) return false;
     }else{
-      if((a.assetType||'skip') !== currentAssetSubview) return false;
+      if((a.assetType||'skip') !== currentAssetSubview || a.retired) return false;
     }
     if(!q) return true;
     return (a.assetNumber||'').toLowerCase().includes(q) || (a.customerName||'').toLowerCase().includes(q) ||
@@ -3409,7 +3419,24 @@ function renderAssets(){
       (q ? 'No assets match that search.'
         : currentAssetSubview==='skip' ? 'No smart skips yet. Add your first one.'
         : currentAssetSubview==='on_order' ? 'Nothing on order right now.'
+        : currentAssetSubview==='retired' ? 'No retired assets.'
         : 'No collection points yet. Add your first one.') + '</div>';
+    return;
+  }
+
+  if(currentAssetSubview==='retired'){
+    let html = '<table class="qtable"><thead><tr><th>Asset number</th><th>Type</th><th>Customer / Housing association</th><th>Address</th><th>Postcode</th></tr></thead><tbody>';
+    filtered.forEach(a=>{
+      const isScpRow = (a.assetType||'skip')==='scp';
+      html += '<tr onclick="openAssetModal(\''+a.id+'\')" style="cursor:pointer;">';
+      html += '<td><b>'+escapeHtml(a.assetNumber||'—')+'</b></td>';
+      html += '<td>'+(isScpRow ? 'Collection point' : 'Smart skip')+'</td>';
+      html += '<td>'+escapeHtml((isScpRow ? a.housingAssociation : a.customerName)||'—')+'</td>';
+      html += '<td>'+escapeHtml(a.address||'—')+'</td><td>'+escapeHtml(a.postcode||'—')+'</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
     return;
   }
 
@@ -3437,7 +3464,7 @@ function renderAssets(){
   let html = '<table class="qtable"><thead><tr>';
   html += isScp
     ? '<th>Asset</th><th>Housing association</th><th>Address</th><th>Branch</th><th>Branch contact</th>'
-    : '<th>Asset</th><th>Customer</th><th>Address</th><th>Postcode</th><th>Container type</th><th>Weekly rental</th><th>Sited</th>';
+    : '<th>Asset number</th><th>Customer</th><th>Housing association</th><th>Address line 1</th><th>Town</th><th>Postcode</th><th>Padlock number</th>';
   html += '</tr></thead><tbody>';
   filtered.forEach(a=>{
     html += '<tr onclick="openAssetModal(\''+a.id+'\')" style="cursor:pointer;">';
@@ -3445,8 +3472,8 @@ function renderAssets(){
     if(isScp){
       html += '<td>'+escapeHtml(a.housingAssociation||'—')+'</td><td>'+escapeHtml(a.address||'—')+'</td><td>'+escapeHtml(a.branch||'—')+'</td><td>'+escapeHtml(a.branchContact||'—')+'</td>';
     }else{
-      html += '<td>'+escapeHtml(a.customerName||'—')+'</td><td>'+escapeHtml(a.address||'—')+'</td><td>'+escapeHtml(a.postcode||'—')+'</td><td>'+escapeHtml(a.containerType||'—')+'</td>';
-      html += '<td>'+escapeHtml(a.weeklyRental ? ('£'+a.weeklyRental) : '—')+'</td><td>'+escapeHtml(a.sitedDate||'—')+'</td>';
+      html += '<td>'+escapeHtml(a.customerName||'—')+'</td><td>'+escapeHtml(a.housingAssociation||'—')+'</td><td>'+escapeHtml(a.addressLine1||a.address||'—')+'</td><td>'+escapeHtml(a.town||'—')+'</td>';
+      html += '<td>'+escapeHtml(a.postcode||'—')+'</td><td>'+escapeHtml(a.padlockNumber||'—')+'</td>';
     }
     html += '</tr>';
   });
@@ -3624,7 +3651,6 @@ function onAssetTypeChange(){
   document.getElementById('aInformationField').style.display = (isScp || hideLeftover) ? 'none' : 'block';
   document.getElementById('skipStatusChecksSection').style.display = hideLeftover ? 'none' : 'block';
   document.getElementById('skipCommercialSection').style.display = hideLeftover ? 'none' : 'block';
-  document.getElementById('aNotesField').style.display = hideLeftover ? 'none' : 'block';
 }
 
 function onSensorSerialNAChange(){
@@ -3796,6 +3822,25 @@ async function deleteAsset(){
   await loadAssets();
   renderAssets();
   showToast('Asset deleted.');
+}
+
+function exportAssetsToExcel(){
+  const skipRows = assets.filter(a=>(a.assetType||'skip')==='skip').map(a=>({
+    'Asset number': a.assetNumber||'', 'Customer': a.customerName||'', 'Housing association': a.housingAssociation||'',
+    'Address line 1': a.addressLine1||a.address||'', 'Address line 2': a.addressLine2||'', 'Town': a.town||'', 'County': a.county||'',
+    'Postcode': a.postcode||'', 'Sited date': a.sitedDate||'', 'Smart skip type': a.containerType||'', 'Volume (yd³)': a.containerVolume||'',
+    'Waste stream': a.wasteStream||'', 'Paint drum': a.paintDrum||'', 'Padlock code': a.padlockNumber||'', 'Sensor serial': a.sensorSerial||'',
+    'Gate code number': a.gateCodeNumber||'', 'Manufacturer': a.manufacturer||'', 'Weekly rental': a.weeklyRental||'',
+    'On order': a.onOrder ? 'Yes' : 'No', 'Retired': a.retired ? 'Yes' : 'No', 'Notes': a.notes||''
+  }));
+  const scpRows = assets.filter(a=>(a.assetType||'skip')==='scp').map(a=>({
+    'Asset number': a.assetNumber||'', 'Housing association': a.housingAssociation||'', 'Address': a.address||'', 'Postcode': a.postcode||'',
+    'Branch': a.branch||'', 'Branch contact': a.branchContact||'', 'Master pin': a.masterPin||'', 'Retired': a.retired ? 'Yes' : 'No', 'Notes': a.notes||''
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skipRows), 'Smart skips');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(scpRows), 'Collection points');
+  XLSX.writeFile(wb, 'dockit-assets-' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
 /* ---------- Service Providers ---------- */
