@@ -2031,7 +2031,7 @@ function switchView(view){
   if(view==='organisations') showOrganisationsList();
   if(view==='pipeline') renderPipeline();
   if(view==='quotes') showQuoteList();
-  if(view==='assets') renderAssets();
+  if(view==='assets'){ showAssetsListView(); renderAssets(); }
   if(view==='serviceproviders') showServiceProvidersList();
   if(view==='tasks') renderTasks();
   if(view==='feedback') renderFeatureRequestsLists();
@@ -3654,6 +3654,11 @@ async function renderAssetsMap(){
       (line2 ? escapeHtml(line2) + '<br>' : '') +
       (a.address ? escapeHtml(a.address) + '<br>' : '') +
       escapeHtml(a.postcode||'')
+    );
+    marker.bindTooltip(
+      (a.customerName ? escapeHtml(a.customerName) : 'No customer on file') +
+      (a.housingAssociation ? '<br>' + escapeHtml(a.housingAssociation) : '') +
+      (a.town ? '<br>' + escapeHtml(a.town) : '')
     );
     leafletMarkersLayer.addLayer(marker);
     bounds.push([a.latitude, a.longitude]);
@@ -7960,7 +7965,7 @@ function quoteRefLabel(q){
 
 </script>
 <!-- ============ FLOATING RECORDING CONTROL (shown while the modal is hidden mid-recording) ============ -->
-<div id="frFloatingRecordControl" style="display:none;position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:14px 18px;border-radius:12px;z-index:300;align-items:center;gap:14px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">
+<div id="frFloatingRecordControl" style="display:none;position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:14px 18px;border-radius:12px;z-index:1100;align-items:center;gap:14px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">
   <span style="font-size:13px;font-weight:600;">● Recording — talk us through the issue</span>
   <button class="btn danger small" onclick="stopFrRecording()">⬛ Stop</button>
 </div>
@@ -8006,7 +8011,7 @@ function quoteRefLabel(q){
 </div>
 
 <!-- ============ FLOATING RECORDING CONTROL (release demo) ============ -->
-<div id="mrFloatingRecordControl" style="display:none;position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:14px 18px;border-radius:12px;z-index:300;align-items:center;gap:14px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">
+<div id="mrFloatingRecordControl" style="display:none;position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:14px 18px;border-radius:12px;z-index:1100;align-items:center;gap:14px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">
   <span style="font-size:13px;font-weight:600;">● Recording your demo — talk us through it</span>
   <button class="btn danger small" onclick="stopMrRecording()">⬛ Stop</button>
 </div>
