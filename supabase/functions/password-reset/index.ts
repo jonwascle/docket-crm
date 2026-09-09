@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
         .from('password_setup_tokens').insert({ user_id: profile.id }).select('token').single();
       if (linkErr) return json({ error: linkErr.message }, 500);
 
-      const origin = req.headers.get('origin') || 'https://dockit-wascle.vercel.app';
+      const origin = req.headers.get('origin') || 'https://docket-wascle.vercel.app';
       const resetLink = origin + '/#set-password=' + linkRow.token;
       const html = buildPasswordEmailHtml(profile.name, resetLink, 'reset');
       await sendEmail([profile.email], 'Reset your Dockit password', html);

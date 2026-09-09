@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const appUrl = Deno.env.get('DOCKIT_APP_URL') || 'https://dockit-wascle.vercel.app';
+    const appUrl = Deno.env.get('DOCKET_APP_URL') || 'https://docket-wascle.vercel.app';
     let tasksToNotify;
 
     if (body.taskId) {

@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
           if (spEmail) {
             // Rebuild the same public link the supplier used, from this
             // request's origin (falls back to the known production URL).
-            const origin = req.headers.get('origin') || 'https://dockit-wascle.vercel.app';
+            const origin = req.headers.get('origin') || 'https://docket-wascle.vercel.app';
             const continueLink = origin + '/#supplier-onboard=' + token;
             const html = buildFollowUpEmailHtml(spName, continueLink);
             await sendEmail([spEmail], 'Thanks for the update — Wascle onboarding', html, [], 'SP_EMAIL_FROM');
@@ -281,7 +281,7 @@ function escapeHtmlServer(str: string) {
 function buildStaffNotificationEmailHtml(staffName: string, spName: string, isFinal: boolean, spId: string) {
   const greetingName = escapeHtmlServer((staffName || '').split(' ')[0] || 'there');
   const safeSpName = escapeHtmlServer(spName);
-  const dockitLink = 'https://dockit-wascle.vercel.app/#view=serviceproviders&sp=' + spId + '&subtab=recruitment';
+  const docketLink = 'https://docket-wascle.vercel.app/#view=serviceproviders&sp=' + spId + '&subtab=recruitment';
   const statusLine = isFinal
     ? `<b>${safeSpName}</b> has just finished submitting their onboarding form.`
     : `<b>${safeSpName}</b> has just saved some progress on their onboarding form — they may still be filling in the rest.`;
@@ -302,7 +302,7 @@ function buildStaffNotificationEmailHtml(staffName: string, spName: string, isFi
           <p style="margin: 0;">${statusLine}</p>
         </div>
         <p style="margin: 0 0 24px;text-align:center;">
-          <a href="${dockitLink}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">View in Dockit →</a>
+          <a href="${docketLink}" style="display: inline-block; background-color: #1B1B1B; color: #F5B429; text-decoration: none; padding: 13px 26px; border-radius: 6px; font-weight: 700; font-size: 14px;">View in Dockit →</a>
         </p>
         <p style="margin: 0 0 32px;border-top:1px solid #F0EBDD;padding-top:20px;color:#7A7568;font-size:12.5px;">This is an automatic notification from Dockit.</p>
       </div>

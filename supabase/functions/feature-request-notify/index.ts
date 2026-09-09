@@ -180,7 +180,7 @@ function buildReleasedEmailHtml(reqRow, recipientName) {
   const watchLinkSection = reqRow.release_video_path
     ? `<p style="margin: 28px 0 12px;">Watch the short video below explaining this ${typeLabel}:</p>
        <p style="margin: 0;text-align:center;">
-         <a href="https://dockit-wascle.vercel.app/#watch-demo=${reqRow.id}" style="display: inline-block; background-color: #1B1B1B; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing:0.2px;">▶&nbsp;&nbsp;Watch the video</a>
+         <a href="https://docket-wascle.vercel.app/#watch-demo=${reqRow.id}" style="display: inline-block; background-color: #1B1B1B; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; letter-spacing:0.2px;">▶&nbsp;&nbsp;Watch the video</a>
        </p>`
     : '';
 
