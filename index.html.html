@@ -1286,10 +1286,25 @@
     <div class="field"><label>Notes</label><textarea id="srNotes"></textarea></div>
     <div class="modal-actions">
       <button class="btn danger small" id="skipRequestDeleteBtn" style="display:none;" onclick="deleteSkipRequest()">Delete</button>
+      <button class="btn small" id="skipRequestAssignBtn" style="display:none;margin-left:8px;" onclick="openAssignSkipRequestModal()">Assign to available asset →</button>
       <div class="right">
         <button class="btn ghost small" onclick="closeModal('skipRequestModalOverlay')">Cancel</button>
         <button class="btn small" onclick="saveSkipRequest()">Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Assign skip request to an available on-order asset ---------- -->
+<div class="modal-overlay" id="assignSkipRequestModalOverlay">
+  <div class="modal" style="max-width:380px;">
+    <p class="modal-title"><span>Assign to an available asset</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('assignSkipRequestModalOverlay')">✕</span></p>
+    <input type="hidden" id="assignSkipRequestId">
+    <p style="font-size:13px;color:var(--slate);margin:0 0 14px;">Earmarks this customer on the chosen on-order asset and removes the enquiry from Potential requests.</p>
+    <div class="field"><label>Available on-order assets</label><select id="assignSkipRequestAssetSelect"></select></div>
+    <div class="modal-actions">
+      <button class="btn ghost small" onclick="closeModal('assignSkipRequestModalOverlay')">Cancel</button>
+      <div class="right"><button class="btn small" onclick="confirmAssignSkipRequest()">Assign</button></div>
     </div>
   </div>
 </div>
@@ -3451,7 +3466,51 @@ function openSkipRequestModal(id){
   document.getElementById('srAddressNote').value = r ? (r.addressNote||'') : '';
   document.getElementById('srNotes').value = r ? (r.notes||'') : '';
   document.getElementById('skipRequestDeleteBtn').style.display = r ? 'inline-flex' : 'none';
+  document.getElementById('skipRequestAssignBtn').style.display = r ? 'inline-flex' : 'none';
   document.getElementById('skipRequestModalOverlay').classList.add('active');
+}
+
+function availableOnOrderAssets(){
+  return assets.filter(a=>(a.assetType||'skip')==='skip' && a.onOrder && !a.retired && (!a.reservedForName || !a.reservedForName.trim()));
+}
+
+function openAssignSkipRequestModal(){
+  const id = document.getElementById('skipRequestId').value;
+  if(!id) return;
+  const available = availableOnOrderAssets();
+  const select = document.getElementById('assignSkipRequestAssetSelect');
+  if(available.length===0){
+    select.innerHTML = '<option value="">No available assets right now</option>';
+  }else{
+    select.innerHTML = available.map(a=>
+      '<option value="'+a.id+'">'+escapeHtml(a.assetNumber||'—')+(a.manufacturer?' — '+escapeHtml(a.manufacturer):'')+'</option>'
+    ).join('');
+  }
+  document.getElementById('assignSkipRequestId').value = id;
+  closeModal('skipRequestModalOverlay');
+  document.getElementById('assignSkipRequestModalOverlay').classList.add('active');
+}
+
+async function confirmAssignSkipRequest(){
+  const requestId = document.getElementById('assignSkipRequestId').value;
+  const assetId = document.getElementById('assignSkipRequestAssetSelect').value;
+  if(!assetId){ showToast('No available asset to assign to.', true); return; }
+  const request = skipRequests.find(r=>r.id===requestId);
+  if(!request) return;
+  const { error } = await sb.from('assets').update({
+    reserved_for_name: request.customerName,
+    reserved_for_address: request.addressNote
+  }).eq('id', assetId);
+  if(error){ showToast('Could not assign: ' + error.message, true); return; }
+  const { error: delError } = await sb.from('skip_requests').delete().eq('id', requestId);
+  if(delError){ showToast('Assigned, but could not remove the request: ' + delError.message, true); }
+  closeModal('assignSkipRequestModalOverlay');
+  await loadAssets();
+  await loadSkipRequests();
+  renderAssets();
+  renderSkipRequests();
+  renderAssetsStats();
+  showToast('Assigned — this customer is now earmarked on that asset.');
 }
 
 async function saveSkipRequest(){

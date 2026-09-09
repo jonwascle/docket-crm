@@ -41,6 +41,8 @@ Adding a new smart skip only requires Customer name, Address line 1, Town, Count
 
 A new skip can also be created as "On order" — allocated an asset number and being manufactured, but not yet delivered — which only needs a Manufacturer to start (no customer required yet, so stock can sit "available, unassigned"). An on-order skip can still be earmarked for a customer/address without leaving the On order list, and only moves into Smart skips once "This smart skip is now delivered and live" is ticked, at which point the full required-field set applies.
 
+The On order subtab also has a "Potential requests" section at the bottom — a lightweight log of customer enquiries before a PO's actually been placed, just Customer name, a rough address/area note, and free-text notes, so nothing gets forgotten. Opening a request shows an "Assign to available asset →" button: pick from whichever on-order assets are currently available/unassigned (shown with their manufacturer), and confirming earmarks that customer onto the chosen asset and removes the request from Potential requests, since it's now a real order.
+
 Only admins can delete an asset.
 
 SERVICE PROVIDERS
