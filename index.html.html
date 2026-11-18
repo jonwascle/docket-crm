@@ -572,7 +572,10 @@
             <p class="view-title">Default pricing</p>
             <p class="view-sub" id="quoteDefaultPricingSub">The price list every new quote is built from.</p>
           </div>
-          <button class="btn ghost small" onclick="showQuoteList()">← Back</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn small" id="quoteDefaultPricingAddBtn" style="display:none;" onclick="openQuoteDefaultPricingLineModal()">+ Add line</button>
+            <button class="btn ghost small" onclick="showQuoteList()">← Back</button>
+          </div>
         </div>
         <div class="field-row" style="align-items:flex-end;">
           <div class="field" style="max-width:220px;"><label>Adjust all lines by (%)</label>
@@ -1367,6 +1370,27 @@
       <div class="right">
         <button class="btn ghost small" onclick="closeModal('spTeamMemberModalOverlay')">Cancel</button>
         <button class="btn small" onclick="saveSPTeamMember()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Quote default pricing: add line modal (admin only) ---------- -->
+<div class="modal-overlay" id="quoteDefaultPricingLineModalOverlay">
+  <div class="modal">
+    <p class="modal-title"><span>Add a line to the price list</span><span style="cursor:pointer;color:var(--slate);" onclick="closeModal('quoteDefaultPricingLineModalOverlay')">✕</span></p>
+    <div class="field"><label>Category</label>
+      <input id="qdpLineCategory" list="qdpLineCategoryOptions" placeholder="Pick an existing category or type a new one">
+      <datalist id="qdpLineCategoryOptions"></datalist>
+    </div>
+    <div class="field"><label>Service name</label><input id="qdpLineName" placeholder="e.g. MATTRESS"></div>
+    <div class="field checkbox-field"><label><input type="checkbox" id="qdpLineManual" onchange="document.getElementById('qdpLinePriceField').style.display = this.checked ? 'none' : ''"> No default price — varies per site, entered manually on each quote</label></div>
+    <div class="field" id="qdpLinePriceField"><label>Default price (£)</label><input id="qdpLinePrice" type="number" step="0.01" min="0"></div>
+    <div class="field checkbox-field"><label><input type="checkbox" id="qdpLineEditableByUser"> Managers and users can edit this rate</label></div>
+    <div class="modal-actions">
+      <div class="right">
+        <button class="btn ghost small" onclick="closeModal('quoteDefaultPricingLineModalOverlay')">Cancel</button>
+        <button class="btn small" onclick="saveQuoteDefaultPricingLine()">Add line</button>
       </div>
     </div>
   </div>
@@ -4907,6 +4931,7 @@ async function openQuoteDefaultPricing(){
   document.getElementById('quoteDefaultPricingSub').textContent = currentProfile.role === 'admin'
     ? 'Every line in the catalogue can be edited here.'
     : 'You can edit the Smart Skip rates below — everything else is set by an admin.';
+  document.getElementById('quoteDefaultPricingAddBtn').style.display = currentProfile.role === 'admin' ? '' : 'none';
   document.getElementById('quoteListMode').style.display = 'none';
   document.getElementById('quoteBuilderMode').style.display = 'none';
   document.getElementById('quoteDefaultPricingMode').style.display = 'block';
@@ -4928,9 +4953,10 @@ function renderQuoteDefaultPricingList(){
     if(!groups[cat]){ groups[cat] = []; order.push(cat); }
     groups[cat].push(row);
   });
-  let html = '<table class="qtable"><thead><tr><th>Service</th><th>Default rate</th></tr></thead><tbody>';
+  const cols = isAdmin ? 3 : 2;
+  let html = '<table class="qtable"><thead><tr><th>Service</th><th>Default rate</th>'+(isAdmin ? '<th></th>' : '')+'</tr></thead><tbody>';
   order.forEach(cat=>{
-    html += '<tr><td colspan="2" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
+    html += '<tr><td colspan="'+cols+'" style="background:var(--paper-card-alt);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--slate);">'+escapeHtml(cat)+'</td></tr>';
     groups[cat].forEach(row=>{
       const canEdit = isAdmin || row.editable_by_user;
       html += '<tr>';
@@ -4941,6 +4967,9 @@ function renderQuoteDefaultPricingList(){
         html += '<td><input class="price-input" type="number" step="0.01" value="'+row.price+'" onchange="updateQuoteDefaultPricingRate(\''+row.id+'\', this.value)"></td>';
       }else{
         html += '<td>£'+Number(row.price).toFixed(2)+'</td>';
+      }
+      if(isAdmin){
+        html += '<td style="width:36px;text-align:right;"><span title="Delete line" style="cursor:pointer;color:var(--slate);" onclick="deleteQuoteDefaultPricingLine(\''+row.id+'\')">'+ICONS.trash+'</span></td>';
       }
       html += '</tr>';
     });
@@ -4956,6 +4985,69 @@ async function updateQuoteDefaultPricingRate(id, value){
   await loadQuoteDefaultPricing();
   renderQuoteDefaultPricingList();
   showToast('Rate updated.');
+}
+
+function openQuoteDefaultPricingLineModal(){
+  if(currentProfile.role !== 'admin'){ showToast('Only admins can add lines to the price list.', true); return; }
+  const cats = [...new Set(quoteDefaultPricingRows.map(r=>r.category))];
+  document.getElementById('qdpLineCategoryOptions').innerHTML = cats.map(c=>'<option value="'+escapeHtml(c)+'">').join('');
+  ['qdpLineCategory','qdpLineName','qdpLinePrice'].forEach(id=>document.getElementById(id).value = '');
+  document.getElementById('qdpLineManual').checked = false;
+  document.getElementById('qdpLineEditableByUser').checked = false;
+  document.getElementById('qdpLinePriceField').style.display = '';
+  document.getElementById('quoteDefaultPricingLineModalOverlay').classList.add('active');
+}
+
+async function saveQuoteDefaultPricingLine(){
+  const typedCategory = document.getElementById('qdpLineCategory').value.trim();
+  const name = document.getElementById('qdpLineName').value.trim();
+  const manual = document.getElementById('qdpLineManual').checked;
+  const priceRaw = document.getElementById('qdpLinePrice').value;
+  if(!typedCategory){ showToast('Choose or type a category.', true); return; }
+  if(!name){ showToast('Enter a service name.', true); return; }
+  if(quoteDefaultPricingRows.some(r=>r.name.toLowerCase()===name.toLowerCase())){
+    showToast('There is already a line called ' + name + '.', true); return;
+  }
+  const price = Number(priceRaw);
+  if(!manual && (priceRaw==='' || isNaN(price) || price < 0)){ showToast('Enter a default price.', true); return; }
+  // Reuse an existing category's exact spelling if it matches ignoring case.
+  const category = quoteDefaultPricingRows.map(r=>r.category).find(c=>c.toLowerCase()===typedCategory.toLowerCase()) || typedCategory;
+
+  // Place the new line at the end of its category (or the end of the list for a new category),
+  // shifting any later lines down by one so the order stays intact.
+  const inCat = quoteDefaultPricingRows.filter(r=>r.category===category);
+  const maxAll = quoteDefaultPricingRows.reduce((m,r)=>Math.max(m, r.sort_order), -1);
+  const sortOrder = inCat.length ? Math.max(...inCat.map(r=>r.sort_order)) + 1 : maxAll + 1;
+  const later = quoteDefaultPricingRows.filter(r=>r.sort_order >= sortOrder).sort((a,b)=>b.sort_order-a.sort_order);
+  for(const row of later){
+    const { error } = await sb.from('quote_default_pricing').update({ sort_order: row.sort_order + 1 }).eq('id', row.id);
+    if(error){ showToast('Could not reorder the list: ' + error.message, true); return; }
+  }
+
+  const { error } = await sb.from('quote_default_pricing').insert({
+    category,
+    name,
+    price: manual ? null : round2(price),
+    sort_order: sortOrder,
+    requires_manual_price: manual,
+    editable_by_user: document.getElementById('qdpLineEditableByUser').checked
+  });
+  if(error){ showToast('Could not add line: ' + error.message, true); return; }
+  closeModal('quoteDefaultPricingLineModalOverlay');
+  await loadQuoteDefaultPricing();
+  renderQuoteDefaultPricingList();
+  showToast(name + ' added to the price list.');
+}
+
+async function deleteQuoteDefaultPricingLine(id){
+  const row = quoteDefaultPricingRows.find(r=>r.id===id);
+  if(!row) return;
+  if(!confirm('Remove "' + row.name + '" from the price list? Quotes already saved will keep it.')) return;
+  const { error } = await sb.from('quote_default_pricing').delete().eq('id', id);
+  if(error){ showToast('Could not delete: ' + error.message, true); return; }
+  await loadQuoteDefaultPricing();
+  renderQuoteDefaultPricingList();
+  showToast(row.name + ' removed from the price list.');
 }
 
 async function applyQuoteDefaultPricingBulkAdjust(){
